@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { GameView, Kind, LogEntry, Puzzle, RaceEvent } from "./types";
 
+/** Why a turn produced no move (set by the backend runner). */
+const FORFEIT_TEXT: Record<string, string> = {
+  refused: "model refused to answer",
+  malformed: "malformed output",
+  timeout: "timed out",
+  api_error: "API error",
+};
+
 export interface RaceState {
   raceId: string | null;
   mode: string | null;
@@ -86,8 +94,8 @@ export function applyEvent(s: RaceState, ev: RaceEvent): RaceState {
         games: { ...s.games, [g.key]: ng },
         log: pushLog(s, ev.move
           ? { t: ev.t, model: g.key, kind: "move", text: ev.move, detail: `${fmtLatency(ev.latency_s)}${conf}${retries}` }
-          : { t: ev.t, model: g.key, kind: "forfeit", text: "invalid output, turn forfeited",
-              detail: `${ev.invalid_outputs ?? 0} malformed${retries}`, tone: "bad" }),
+          : { t: ev.t, model: g.key, kind: "forfeit", text: `${FORFEIT_TEXT[ev.forfeit_reason] ?? "no valid move"}, turn forfeited`,
+              detail: `${ev.attempts ?? 1} attempt${(ev.attempts ?? 1) > 1 ? "s" : ""}, cube unchanged`, tone: "bad" }),
       };
     }
     case "game_end": {

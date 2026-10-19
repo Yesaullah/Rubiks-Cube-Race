@@ -109,6 +109,7 @@ export interface ModelSummary {
   invalid_outputs: number;
   retries: number;
   forfeits: number;
+  refusals?: number;
   out_of_moves: number;
   out_of_time: number;
   mean_confidence: number | null;

@@ -44,7 +44,9 @@ const GROUPS: { name: string; cols: Col[] }[] = [
   {
     name: "Reliability and cost",
     cols: [
-      { key: "inv", head: "Invalid outputs", get: (r) => r.invalid_outputs, fmt: (r) => String(r.invalid_outputs) },
+      { key: "ff", head: "Forfeited turns", get: (r) => r.forfeits, fmt: (r) => String(r.forfeits) },
+      { key: "ref", head: "Refusals", get: (r) => r.refusals ?? 0, fmt: (r) => String(r.refusals ?? 0) },
+      { key: "inv", head: "Malformed outputs", get: (r) => r.invalid_outputs, fmt: (r) => String(r.invalid_outputs) },
       { key: "ret", head: "Retries", get: (r) => r.retries, fmt: (r) => String(r.retries) },
       { key: "cost", head: "Cost", get: (r) => r.cost_usd, fmt: (r) => `$${r.cost_usd.toFixed(3)}` },
     ],
@@ -203,7 +205,7 @@ export default function Dashboard({ mode, config, refreshKey }: { mode: Mode; co
             </div>
             <p className="foot-note">
               Optimality gap = moves used − exact shortest moves, averaged over solved games only. Unsolved games hit the
-              move or time limit and have no gap. Latency includes retries.
+              move or time limit and have no gap. Latency includes retries. A forfeited turn produced no valid move after all retries (it still counts toward the 30-move limit); a refusal is the provider answering "refused to answer".
             </p>
           </section>
 

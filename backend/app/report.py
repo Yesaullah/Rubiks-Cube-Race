@@ -40,8 +40,8 @@ def _gap(x):
 
 def model_table(rows: list[dict]) -> str:
     head = ("| Model | Type | Trials | Success rate | Avg latency / move | Median | p95 | Avg total time "
-            "| Avg moves | Avg moves (solved) vs shortest | Mean optimality gap | Gap = 0 | Invalid outputs | Retries | Cost |\n"
-            "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+            "| Avg moves | Avg moves (solved) vs shortest | Mean optimality gap | Gap = 0 | Forfeited turns | Refusals | Malformed outputs | Retries | Cost |\n"
+            "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
     lines = []
     for r in rows:
         lines.append(
@@ -50,7 +50,7 @@ def model_table(rows: list[dict]) -> str:
             f"| **{_lat(r['mean_latency_s'])}** | {_lat(r['median_latency_s'])} | {_lat(r['p95_latency_s'])} "
             f"| {_time(r['mean_total_time_s'])} | {_n(r['mean_moves'])} "
             f"| {_n(r['mean_moves_solved'])} vs {_n(r['mean_optimal_solved'])} | **{_gap(r['mean_gap'])}** "
-            f"| {r['zero_gap']} | {r['invalid_outputs']} | {r['retries']} | ${r['cost_usd']:.3f} |")
+            f"| {r['zero_gap']} | {r['forfeits']} | {r.get('refusals', 0)} | {r['invalid_outputs']} | {r['retries']} | ${r['cost_usd']:.3f} |")
     return head + "\n".join(lines) + "\n"
 
 

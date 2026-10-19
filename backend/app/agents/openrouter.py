@@ -7,7 +7,7 @@ import httpx
 
 from ..config import ModelSpec
 from .base import Agent, CallResult, FatalAPIError, MalformedOutput
-from .prompt import FACELET_LEGEND, INSTRUCTIONS, move_criteria
+from .prompt import INSTRUCTIONS, move_criteria
 
 DECISIONS_URL = "https://openrouter.ai/api/alpha/decisions"
 CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -94,8 +94,9 @@ def parse_decision_response(data: dict) -> CallResult:
 
 
 SYSTEM_PROMPT = (
-    f"{INSTRUCTIONS}\n\n{FACELET_LEGEND}\n\nLegal moves (choose exactly one): "
-    + ", ".join(move_criteria())
+    # the same instruction and the same 18 move definitions the decision models get as criteria
+    f"{INSTRUCTIONS}\n\nLegal moves (choose exactly one):\n"
+    + "\n".join(f"- {m}: {d}" for m, d in move_criteria().items())
     + '\n\nReply with only a JSON object of the form {"move": "<move>"}.'
 )
 

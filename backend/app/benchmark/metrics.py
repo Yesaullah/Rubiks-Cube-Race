@@ -55,6 +55,7 @@ def summarize(trials: list[dict], set_name: str | None = None) -> list[dict]:
             "invalid_outputs": sum(t["invalid_outputs"] for t in ts),
             "retries": sum(t["retries"] for t in ts),
             "forfeits": sum(t["forfeits"] for t in ts),
+            "refusals": sum(t.get("refusals", 0) for t in ts),
             "out_of_moves": sum(1 for t in ts if t["status"] == "out_of_moves"),
             "out_of_time": sum(1 for t in ts if t["status"] == "out_of_time"),
             "mean_confidence": _mean([c for t in ts for c in t["confidences"]]),

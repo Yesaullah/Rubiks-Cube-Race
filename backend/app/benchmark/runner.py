@@ -106,7 +106,7 @@ class RaceRunner:
         state = puzzle["facelets"]
         history: list[str] = []
         moves_log: list[dict] = []
-        forfeits = invalid = retries = 0
+        forfeits = invalid = retries = refusals = 0
         tokens = {"prompt": 0, "completion": 0, "reasoning": 0}
         cost = 0.0
         errors: list[str] = []
@@ -153,6 +153,8 @@ class RaceRunner:
                      "elapsed_s": round(time.perf_counter() - start, 3)}
             if res.move is None:
                 forfeits += 1
+                entry["forfeit_reason"] = forfeit_reason(res)
+                refusals += entry["forfeit_reason"] == "refused"
                 if any(e.startswith(("fatal", "http 4")) for e in res.errors) and not res.invalid_outputs:
                     status = STATUS_ERROR  # e.g. bad model id / auth: no point continuing
             else:
@@ -174,7 +176,7 @@ class RaceRunner:
             "total_time_s": round(total, 4),
             "latencies_s": latencies,
             "mean_latency_s": round(sum(latencies) / len(latencies), 4) if latencies else None,
-            "invalid_outputs": invalid, "retries": retries, "errors": errors[:20],
+            "invalid_outputs": invalid, "retries": retries, "refusals": refusals, "errors": errors[:20],
             "confidences": [m["confidence"] for m in moves_log if m["confidence"] is not None],
             "tokens": tokens, "cost_usd": round(cost, 6),
             "final_facelets": state, "correct_facelets": correct_facelets(state),
@@ -182,6 +184,19 @@ class RaceRunner:
         }
         emit("game_end", model=spec.key, **_public(trial))
         return trial
+
+
+def forfeit_reason(res) -> str:
+    """Why a turn produced no move, from the last attempt's error: the provider refusing to answer
+    (HTTP 502 "refused to answer"), malformed output, timeout, or another API/transport error."""
+    last = res.errors[-1] if res.errors else ""
+    if "refused to answer" in last:
+        return "refused"
+    if last.startswith("malformed"):
+        return "malformed"
+    if last.startswith("timeout"):
+        return "timeout"
+    return "api_error"
 
 
 def _assign_ranks(trials: list[dict]) -> None:
@@ -196,5 +211,5 @@ def _assign_ranks(trials: list[dict]) -> None:
 
 def _public(t: dict) -> dict:
     keys = ("model_key", "label", "status", "solved", "moves", "forfeits", "gap", "total_time_s",
-            "mean_latency_s", "invalid_outputs", "retries", "cost_usd", "correct_facelets", "rank")
+            "mean_latency_s", "invalid_outputs", "retries", "refusals", "cost_usd", "correct_facelets", "rank")
     return {k: t.get(k) for k in keys}
