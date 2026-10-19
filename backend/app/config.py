@@ -64,7 +64,7 @@ def load_settings() -> Settings:
         move_timeout_s=_float("MOVE_TIMEOUT_S", 120),
         max_retries=_int("MAX_RETRIES", 2),
         recent_moves_window=_int("RECENT_MOVES_WINDOW", 5),
-        opus_reasoning_effort=os.getenv("OPUS_REASONING_EFFORT", "low"),
-        opus_max_tokens=_int("OPUS_MAX_TOKENS", 4000),
+        opus_reasoning_effort=os.getenv("OPUS_REASONING_EFFORT", "medium"),
+        opus_max_tokens=_int("OPUS_MAX_TOKENS", 8000),
         budget_usd=_float("BUDGET_USD", 8),
     )
