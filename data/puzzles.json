@@ -1,0 +1,344 @@
+[
+  {
+    "id": "warmup-01",
+    "set": "warmup",
+    "scramble": [
+      "D2",
+      "B'",
+      "R'"
+    ],
+    "facelets": "RLBUUBUUBUUURRLRRLFFLFFUBBUDDFDDFLRBDLLDLLDRRRBFDBFDBF",
+    "optimal_length": 3,
+    "optimal_solution": [
+      "R",
+      "B",
+      "D2"
+    ],
+    "optimal_exact": true,
+    "optimal_source": "bidirectional BFS"
+  },
+  {
+    "id": "warmup-02",
+    "set": "warmup",
+    "scramble": [
+      "U2",
+      "D",
+      "R",
+      "F2"
+    ],
+    "facelets": "UUBUUFRDDBRLLRLRRLDLLDFFDBBLUUDDBDDFRRFLLFBBFUFFUBBURR",
+    "optimal_length": 4,
+    "optimal_solution": [
+      "F2",
+      "R'",
+      "D'",
+      "U2"
+    ],
+    "optimal_exact": true,
+    "optimal_source": "bidirectional BFS"
+  },
+  {
+    "id": "primary-01",
+    "set": "primary",
+    "scramble": [
+      "R",
+      "D",
+      "L",
+      "B2"
+    ],
+    "facelets": "BBLBUFBUFRRBRRBFFUUFDUFDULLFDDFDDFURDLLRLLRLLDRRDBUBBU",
+    "optimal_length": 4,
+    "optimal_solution": [
+      "B2",
+      "L'",
+      "D'",
+      "R'"
+    ],
+    "optimal_exact": true,
+    "optimal_source": "bidirectional BFS"
+  },
+  {
+    "id": "primary-02",
+    "set": "primary",
+    "scramble": [
+      "L",
+      "R",
+      "U",
+      "B2",
+      "F'"
+    ],
+    "facelets": "BDFUUUURRBBLDRLFRURDDRFFRUUDLLFDBBBBRFFRLFDLFDBUDBULLL",
+    "optimal_length": 5,
+    "optimal_solution": [
+      "F",
+      "B2",
+      "U'",
+      "L'",
+      "R'"
+    ],
+    "optimal_exact": true,
+    "optimal_source": "bidirectional BFS"
+  },
+  {
+    "id": "primary-03",
+    "set": "primary",
+    "scramble": [
+      "D'",
+      "R2",
+      "D2",
+      "B"
+    ],
+    "facelets": "BRFUUDUUDBBDRRDFFUFFLFFBFLLUDDUDDLLRDLLULLURRRFRRBBBBB",
+    "optimal_length": 4,
+    "optimal_solution": [
+      "B'",
+      "D2",
+      "R2",
+      "D"
+    ],
+    "optimal_exact": true,
+    "optimal_source": "bidirectional BFS"
+  },
+  {
+    "id": "primary-04",
+    "set": "primary",
+    "scramble": [
+      "F",
+      "U2",
+      "L2",
+      "U2",
+      "R'"
+    ],
+    "facelets": "UUBUUBLLBLRRLRRDUUFFDBFDFFRLRFUDFUDFLLDDLLRRUDBBDBFRBB",
+    "optimal_length": 5,
+    "optimal_solution": [
+      "R",
+      "U2",
+      "L2",
+      "U2",
+      "F'"
+    ],
+    "optimal_exact": true,
+    "optimal_source": "bidirectional BFS"
+  },
+  {
+    "id": "primary-05",
+    "set": "primary",
+    "scramble": [
+      "R'",
+      "F",
+      "L2",
+      "R"
+    ],
+    "facelets": "RUFDUFDLUBUURRRRRRBFRBFFBUFURDUDDLDDFLLDLLDLLLBUBBFBBF",
+    "optimal_length": 4,
+    "optimal_solution": [
+      "R'",
+      "L2",
+      "F'",
+      "R"
+    ],
+    "optimal_exact": true,
+    "optimal_source": "bidirectional BFS"
+  },
+  {
+    "id": "primary-06",
+    "set": "primary",
+    "scramble": [
+      "U'",
+      "R2",
+      "U'",
+      "B",
+      "U2"
+    ],
+    "facelets": "UUUUUUFRBDRRRRDFFDLFRFFBFFRDDUDDUFLLLLUDLLDLLBBBBBRBBR",
+    "optimal_length": 5,
+    "optimal_solution": [
+      "U2",
+      "B'",
+      "U",
+      "R2",
+      "U"
+    ],
+    "optimal_exact": true,
+    "optimal_source": "bidirectional BFS"
+  },
+  {
+    "id": "primary-07",
+    "set": "primary",
+    "scramble": [
+      "B'",
+      "L2",
+      "D2",
+      "R2"
+    ],
+    "facelets": "DLUDUURULDLLURRURRBFBBFBBBBRRLDDUDDULLDLLDRRUFBFFBFFFF",
+    "optimal_length": 4,
+    "optimal_solution": [
+      "R2",
+      "D2",
+      "L2",
+      "B"
+    ],
+    "optimal_exact": true,
+    "optimal_source": "bidirectional BFS"
+  },
+  {
+    "id": "primary-08",
+    "set": "primary",
+    "scramble": [
+      "R'",
+      "D",
+      "B2",
+      "R'",
+      "D'"
+    ],
+    "facelets": "FFBUUBUURDLLRRFDBDFFFFFBRRFUULDDUDDBULLRLLLLBURRDBDRBB",
+    "optimal_length": 5,
+    "optimal_solution": [
+      "D",
+      "R",
+      "B2",
+      "D'",
+      "R"
+    ],
+    "optimal_exact": true,
+    "optimal_source": "bidirectional BFS"
+  },
+  {
+    "id": "primary-09",
+    "set": "primary",
+    "scramble": [
+      "D'",
+      "R",
+      "U",
+      "L"
+    ],
+    "facelets": "LUUBUULFFUBBBRRBRRURRUFDRRDBDLFDBRDBFLFFLFFLDLLDUBDULD",
+    "optimal_length": 4,
+    "optimal_solution": [
+      "L'",
+      "U'",
+      "R'",
+      "D"
+    ],
+    "optimal_exact": true,
+    "optimal_source": "bidirectional BFS"
+  },
+  {
+    "id": "primary-10",
+    "set": "primary",
+    "scramble": [
+      "U2",
+      "B2",
+      "L2",
+      "R'",
+      "U"
+    ],
+    "facelets": "UDDUUDBBFUBFLRRLRRLLRBFUBFUDDBUDFUUFFBDLLRRRRLLLDBFDFB",
+    "optimal_length": 5,
+    "optimal_solution": [
+      "U'",
+      "R",
+      "L2",
+      "B2",
+      "U2"
+    ],
+    "optimal_exact": true,
+    "optimal_source": "bidirectional BFS"
+  },
+  {
+    "id": "extension-01",
+    "set": "extension",
+    "scramble": [
+      "B2",
+      "R'",
+      "L'",
+      "F",
+      "B2",
+      "D2",
+      "L2",
+      "R'",
+      "D'",
+      "R'",
+      "B",
+      "F'",
+      "D",
+      "B",
+      "D2"
+    ],
+    "facelets": "LFFFUBFLRBRLFRBUFUUUDDFUFBRRUBRDDBDLBRRULLDDDDLULBRFBL",
+    "optimal_length": 15,
+    "optimal_solution": [
+      "D2",
+      "B'",
+      "D'",
+      "F",
+      "B'",
+      "R",
+      "D",
+      "R",
+      "L2",
+      "D2",
+      "B2",
+      "F'",
+      "L",
+      "R",
+      "B2"
+    ],
+    "optimal_exact": false,
+    "optimal_source": "inverse scramble"
+  },
+  {
+    "id": "extension-02",
+    "set": "extension",
+    "scramble": [
+      "B'",
+      "L'",
+      "U",
+      "D",
+      "L",
+      "D'",
+      "B'",
+      "D",
+      "F",
+      "L'",
+      "D2",
+      "L'",
+      "R",
+      "B",
+      "R",
+      "F'",
+      "L",
+      "U2",
+      "B2",
+      "F2"
+    ],
+    "facelets": "BBDLURLFUFBRBRLRRDBDLRFUBLUDBFUDFDFLRDUULDFFRFDUUBRBLL",
+    "optimal_length": 20,
+    "optimal_solution": [
+      "F2",
+      "B2",
+      "U2",
+      "L'",
+      "F",
+      "R'",
+      "B'",
+      "R'",
+      "L",
+      "D2",
+      "L",
+      "F'",
+      "D'",
+      "B",
+      "D",
+      "L'",
+      "D'",
+      "U'",
+      "L",
+      "B"
+    ],
+    "optimal_exact": false,
+    "optimal_source": "inverse scramble"
+  }
+]
