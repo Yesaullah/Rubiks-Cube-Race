@@ -141,6 +141,22 @@ export function TradeoffPlot({ rows, height = 260 }: { rows: ModelSummary[]; hei
   const decades: number[] = [];
   for (let e = Math.floor(Math.log10(lo)); e <= Math.ceil(Math.log10(hi)); e++) decades.push(10 ** e);
   const fmtS = (v: number) => (v < 1 ? `${Math.round(v * 1000)} ms` : `${v >= 10 ? v.toFixed(0) : v.toFixed(1)} s`);
+  // Label placement: points near the right edge label to their left; points that nearly coincide
+  // (same success rate, latency within ~40%) stack their labels instead of overprinting.
+  const lo10 = Math.log10(decades[0]);
+  const span = Math.log10(decades[decades.length - 1]) - lo10 || 1;
+  const near = (a: { x: number; y: number }, b: { x: number; y: number }) =>
+    a.y === b.y && Math.abs(Math.log10(a.x) - Math.log10(b.x)) < 0.15;
+  const placed = data.map((d) => {
+    const frac = (Math.log10(d.x) - lo10) / span;
+    const cluster = data.filter((o) => near(o, d)).sort((a, b) => a.x - b.x);
+    const k = cluster.indexOf(d);
+    if (cluster.length > 1) {
+      // leftmost of a cluster labels to its left; the rest label to the right, stacked upward
+      return { ...d, left: k === 0, dy: k === 0 ? 0 : (k - 1) * -15 };
+    }
+    return { ...d, left: frac > 0.72, dy: 0 };
+  });
   return (
     <ResponsiveContainer width="100%" height={height}>
       <ScatterChart margin={{ top: 16, right: 24, bottom: 18, left: 0 }}>
@@ -158,11 +174,12 @@ export function TradeoffPlot({ rows, height = 260 }: { rows: ModelSummary[]; hei
               <div className="num">{fmtS(payload[0].payload.x)} per move, {payload[0].payload.y}% solved</div>
             </div>
           ) : null} />
-        <Scatter data={data} isAnimationActive={false}
+        <Scatter data={placed} isAnimationActive={false}
           shape={(p: any) => (
             <g>
               <circle cx={p.cx} cy={p.cy} r={7} fill={engineColor(p.payload.key, p.payload.i)} stroke="#fff" strokeWidth={2} />
-              <text x={p.cx + 11} y={p.cy + 4.5} className="chart-point">
+              <text x={p.payload.left ? p.cx - 11 : p.cx + 11} y={p.cy + 4.5 + p.payload.dy}
+                textAnchor={p.payload.left ? "end" : "start"} className="chart-point">
                 {p.payload.name}
               </text>
             </g>
