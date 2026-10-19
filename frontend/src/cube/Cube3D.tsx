@@ -16,7 +16,7 @@ interface Anim { move: string; from: string; to: string; start: number }
 function Piece({ pos }: { pos: Vec3 }) {
   return (
     <RoundedBox args={[0.96, 0.96, 0.96]} radius={0.08} smoothness={3} position={pos}>
-      <meshStandardMaterial color="#111318" roughness={0.6} />
+      <meshStandardMaterial color="#1a1d23" roughness={0.55} />
     </RoundedBox>
   );
 }
@@ -35,6 +35,9 @@ function StickerMesh({ pos, normal, color }: { pos: Vec3; normal: Vec3; color: s
     </mesh>
   );
 }
+
+const reducedMotion = () =>
+  typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
 function CubeModel({ facelets, move, seq, durationMs = 220 }: Props) {
   const [shown, setShown] = useState(facelets);
@@ -63,7 +66,8 @@ function CubeModel({ facelets, move, seq, durationMs = 220 }: Props) {
 
   useFrame(() => {
     if (!anim || !layer.current) return;
-    const k = Math.min(1, (performance.now() - anim.start) / durationMs);
+    // reduced motion: no turning, the new state appears at once
+    const k = reducedMotion() ? 1 : Math.min(1, (performance.now() - anim.start) / durationMs);
     const eased = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
     const axis = new THREE.Vector3(...NORMALS[anim.move[0]]);
     layer.current.setRotationFromAxisAngle(axis, moveAngle(anim.move) * eased);
@@ -96,10 +100,11 @@ function CubeModel({ facelets, move, seq, durationMs = 220 }: Props) {
 
 export default function Cube3D(props: Props) {
   return (
-    <Canvas camera={{ position: [4.1, 3.5, 5.3], fov: 32 }} dpr={[1, 2]} gl={{ antialias: true }}>
-      <ambientLight intensity={1.6} />
-      <directionalLight position={[5, 8, 6]} intensity={1.6} />
-      <directionalLight position={[-6, -3, -4]} intensity={0.5} />
+    <Canvas camera={{ position: [5.3, 4.5, 6.9], fov: 30 }} dpr={[1, 2]} gl={{ antialias: true }}
+      aria-label="3D view of this engine's cube" role="img">
+      <ambientLight intensity={1.5} />
+      <directionalLight position={[5, 8, 6]} intensity={1.7} />
+      <directionalLight position={[-6, -3, -4]} intensity={0.45} />
       <CubeModel {...props} />
     </Canvas>
   );

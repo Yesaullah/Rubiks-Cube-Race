@@ -1,20 +1,38 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { GameView, Kind, Puzzle, RaceEvent } from "./types";
+import type { GameView, Kind, LogEntry, Puzzle, RaceEvent } from "./types";
 
 export interface RaceState {
   raceId: string | null;
   mode: string | null;
+  runKind: string | null;
   puzzle: Puzzle | null;
   repeat: number;
   order: string[];
   games: Record<string, GameView>;
   limits: { max_moves: number; time_limit_s: number } | null;
   ended: boolean;
+  log: LogEntry[];
 }
 
 export const EMPTY_RACE: RaceState = {
-  raceId: null, mode: null, puzzle: null, repeat: 1, order: [], games: {}, limits: null, ended: false,
+  raceId: null, mode: null, runKind: null, puzzle: null, repeat: 1, order: [], games: {},
+  limits: null, ended: false, log: [],
 };
+
+const LOG_CAP = 80;
+const STATUS_WORDS: Record<string, string> = {
+  solved: "solved the cube",
+  out_of_moves: "reached the 30-move limit",
+  out_of_time: "ran out of time",
+  budget_stop: "stopped at the budget limit",
+  api_error: "stopped on an API error",
+};
+
+function pushLog(s: RaceState, entry: Omit<LogEntry, "id">): LogEntry[] {
+  const id = (s.log[s.log.length - 1]?.id ?? 0) + 1;
+  const log = [...s.log, { ...entry, id }];
+  return log.length > LOG_CAP ? log.slice(log.length - LOG_CAP) : log;
+}
 
 export function applyEvent(s: RaceState, ev: RaceEvent): RaceState {
   if (ev.type === "race_start") {
@@ -23,12 +41,21 @@ export function applyEvent(s: RaceState, ev: RaceEvent): RaceState {
       games[m.key] = {
         key: m.key, label: m.label, kind: m.kind, model_id: m.model_id, status: "waiting",
         facelets: ev.puzzle.facelets, moves: 0, forfeits: 0, history: [], moveSeq: 0,
-        lastMove: null, endT: null, invalid: 0, rank: null, gap: null,
+        lastMove: null, since: ev.t, endT: null, invalid: 0, rank: null, gap: null,
       };
     }
+    const base: RaceState = {
+      raceId: ev.race_id ?? null, mode: ev.mode, runKind: ev.run_kind ?? null, puzzle: ev.puzzle,
+      repeat: ev.repeat, order: ev.models.map((m: any) => m.key), games, limits: ev.limits,
+      ended: false, log: [],
+    };
     return {
-      raceId: ev.race_id ?? null, mode: ev.mode, puzzle: ev.puzzle, repeat: ev.repeat,
-      order: ev.models.map((m: any) => m.key), games, limits: ev.limits, ended: false,
+      ...base,
+      log: pushLog(base, {
+        t: ev.t, model: null, kind: "start",
+        text: `Race started on ${ev.puzzle.id}`,
+        detail: `${ev.puzzle.scramble.length}-turn scramble, shortest solution ${ev.puzzle.optimal_length}`,
+      }),
     };
   }
   if (ev.race_id && s.raceId && ev.race_id !== s.raceId) return s;
@@ -36,33 +63,60 @@ export function applyEvent(s: RaceState, ev: RaceEvent): RaceState {
   switch (ev.type) {
     case "thinking":
       if (!g || g.endT !== null) return s;
-      return { ...s, games: { ...s.games, [g.key]: { ...g, status: "thinking" } } };
+      return { ...s, games: { ...s.games, [g.key]: { ...g, status: "thinking", since: ev.t } } };
     case "move": {
       if (!g) return s;
       const ng: GameView = {
         ...g,
-        history: [...g.history, { move: ev.move, latency: ev.latency_s, confidence: ev.confidence }],
+        history: [...g.history, { move: ev.move, latency: ev.latency_s, confidence: ev.confidence, t: ev.t }],
         invalid: g.invalid + (ev.invalid_outputs ?? 0),
         moves: ev.moves,
         forfeits: ev.forfeits,
+        since: ev.t,
       };
       if (ev.move) {
         ng.facelets = ev.facelets;
         ng.lastMove = ev.move;
         ng.moveSeq = g.moveSeq + 1;
       }
-      return { ...s, games: { ...s.games, [g.key]: ng } };
+      const conf = ev.confidence != null ? `, confidence ${Math.round(ev.confidence * 100)}%` : "";
+      const retries = ev.attempts > 1 ? `, ${ev.attempts - 1} retr${ev.attempts > 2 ? "ies" : "y"}` : "";
+      return {
+        ...s,
+        games: { ...s.games, [g.key]: ng },
+        log: pushLog(s, ev.move
+          ? { t: ev.t, model: g.key, kind: "move", text: ev.move, detail: `${fmtLatency(ev.latency_s)}${conf}${retries}` }
+          : { t: ev.t, model: g.key, kind: "forfeit", text: "invalid output, turn forfeited",
+              detail: `${ev.invalid_outputs ?? 0} malformed${retries}`, tone: "bad" }),
+      };
     }
-    case "game_end":
+    case "game_end": {
       if (!g) return s;
+      const solved = ev.status === "solved";
       return {
         ...s,
         games: { ...s.games, [g.key]: { ...g, status: ev.status, endT: ev.total_time_s, gap: ev.gap } },
+        log: pushLog(s, {
+          t: ev.t, model: g.key, kind: "end", tone: solved ? "ok" : "bad",
+          text: STATUS_WORDS[ev.status] ?? ev.status,
+          detail: solved
+            ? `${ev.moves} moves${ev.gap === 0 ? ", optimal" : ev.gap != null ? `, ${ev.gap} over shortest` : ""} in ${fmtTime(ev.total_time_s)}`
+            : `${ev.moves} moves in ${fmtTime(ev.total_time_s)}`,
+        }),
       };
+    }
     case "race_end": {
       const games = { ...s.games };
       for (const r of ev.results) if (games[r.model_key]) games[r.model_key] = { ...games[r.model_key], rank: r.rank };
-      return { ...s, games, ended: true };
+      const winner = ev.results.find((r: any) => r.rank === 1);
+      return {
+        ...s, games, ended: true,
+        log: pushLog(s, {
+          t: ev.t, model: null, kind: "finish",
+          text: "Race finished",
+          detail: winner ? `${winner.label} ranked first` : undefined,
+        }),
+      };
     }
   }
   return s;
@@ -134,6 +188,10 @@ export function fmtTime(s: number | null | undefined): string {
   const m = Math.floor(s / 60);
   const sec = s - m * 60;
   return `${m}:${sec.toFixed(2).padStart(5, "0")}`;
+}
+
+export function fmtLimit(s: number): string {
+  return s % 60 === 0 ? `${s / 60} min` : `${s} s`;
 }
 
 export function fmtLatency(s: number | null | undefined): string {

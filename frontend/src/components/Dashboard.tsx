@@ -1,181 +1,280 @@
 import { useEffect, useState } from "react";
-import {
-  Bar, BarChart, CartesianGrid, Cell, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis,
-} from "recharts";
 import { api, type Mode } from "../api";
-import { fmtLatency, fmtTime } from "../race";
-import type { Summary } from "../types";
-import { MODEL_COLOR, gapFmt, highlights, num, pct } from "./stats";
+import { fmtLatency, fmtLimit, fmtTime } from "../race";
+import type { Config, ModelSummary, Summary } from "../types";
+import { MovesVsShortest, RankedBars, TradeoffPlot } from "./charts";
+import { KIND_SHORT, SET_DESC, SET_LABEL, engineColor, findingSentence, gapFmt, highlights, num, pct } from "./stats";
 
-const SETS = [
-  ["primary", "Primary (4–5 turns)"],
-  ["warmup", "Warm-up (3–4)"],
-  ["extension", "Extension (15–20)"],
-  ["all", "All sets"],
-] as const;
+const SETS = ["primary", "warmup", "extension", "all"] as const;
 
-export default function Dashboard({ mode, refreshKey }: { mode: Mode; refreshKey: unknown }) {
+type Col = {
+  key: string;
+  head: string;
+  get: (r: ModelSummary) => number | null;
+  fmt: (r: ModelSummary) => string;
+  better?: "lower" | "higher";
+};
+
+const GROUPS: { name: string; cols: Col[] }[] = [
+  {
+    name: "Speed",
+    cols: [
+      { key: "lat", head: "Avg / move", get: (r) => r.mean_latency_s, fmt: (r) => fmtLatency(r.mean_latency_s), better: "lower" },
+      { key: "med", head: "Median", get: (r) => r.median_latency_s, fmt: (r) => fmtLatency(r.median_latency_s) },
+      { key: "p95", head: "p95", get: (r) => r.p95_latency_s, fmt: (r) => fmtLatency(r.p95_latency_s) },
+      { key: "tot", head: "Avg game time", get: (r) => r.mean_total_time_s, fmt: (r) => fmtTime(r.mean_total_time_s) },
+    ],
+  },
+  {
+    name: "Solution quality",
+    cols: [
+      { key: "sr", head: "Success", get: (r) => r.solve_rate, fmt: (r) => `${pct(r.solve_rate)} (${r.solved}/${r.trials})`, better: "higher" },
+      { key: "mv", head: "Avg moves", get: (r) => r.mean_moves, fmt: (r) => num(r.mean_moves) },
+      { key: "mvs", head: "Solved: moves vs shortest", get: (r) => r.mean_moves_solved, fmt: (r) => r.mean_moves_solved == null ? "–" : `${num(r.mean_moves_solved)} vs ${num(r.mean_optimal_solved)}` },
+      { key: "gap", head: "Optimality gap", get: (r) => r.mean_gap, fmt: (r) => gapFmt(r.mean_gap), better: "lower" },
+      { key: "z", head: "Optimal solves", get: (r) => r.zero_gap, fmt: (r) => String(r.zero_gap), better: "higher" },
+    ],
+  },
+  {
+    name: "Reliability and cost",
+    cols: [
+      { key: "inv", head: "Invalid outputs", get: (r) => r.invalid_outputs, fmt: (r) => String(r.invalid_outputs) },
+      { key: "ret", head: "Retries", get: (r) => r.retries, fmt: (r) => String(r.retries) },
+      { key: "cost", head: "Cost", get: (r) => r.cost_usd, fmt: (r) => `$${r.cost_usd.toFixed(3)}` },
+    ],
+  },
+];
+
+function bestKey(rows: ModelSummary[], c: Col): string | null {
+  if (!c.better) return null;
+  const vals = rows.map((r) => ({ k: r.model_key, v: c.get(r) })).filter((x) => x.v != null) as { k: string; v: number }[];
+  if (vals.length < 2) return null;
+  const best = c.better === "lower" ? Math.min(...vals.map((x) => x.v)) : Math.max(...vals.map((x) => x.v));
+  const winners = vals.filter((x) => x.v === best);
+  return winners.length === 1 ? winners[0].k : null;
+}
+
+export default function Dashboard({ mode, config, refreshKey }: { mode: Mode; config: Config; refreshKey: unknown }) {
   const [summary, setSummary] = useState<Summary | null>(null);
+  const [state, setState] = useState<"loading" | "ok" | "error">("loading");
   const [set, setSet] = useState<string>("primary");
 
   useEffect(() => {
-    api.summary(mode).then(setSummary).catch(() => setSummary(null));
+    api.summary(mode).then((s) => { setSummary(s); setState("ok"); }).catch(() => setState("error"));
   }, [mode, refreshKey]);
 
-  if (!summary || summary.trial_count === 0) {
-    return <div className="empty">No {mode} results yet. Run a benchmark from the Race tab.</div>;
-  }
-  const rows = set === "all" ? summary.overall : summary.by_set[set] ?? [];
+  const rows = summary ? (set === "all" ? summary.overall : summary.by_set[set] ?? []) : [];
+  const puzzleRows = summary ? summary.per_puzzle.filter((p) => set === "all" || p.set === set) : [];
+  const puzzleCount = new Set(puzzleRows.map((p) => `${p.puzzle_id}#${p.repeat}`)).size;
   const h = highlights(rows);
-  const chart = rows.map((r) => ({
-    name: r.label,
-    key: r.model_key,
-    latency: r.mean_latency_s ?? 0,
-    solve: Math.round(r.solve_rate * 100),
-    moves: r.mean_moves_solved ?? 0,
-    optimal: r.mean_optimal_solved ?? 0,
-    total: r.mean_total_time_s ?? 0,
-  }));
-  const puzzleRows = summary.per_puzzle.filter((p) => set === "all" || p.set === set);
-  const puzzleIds = [...new Set(puzzleRows.map((p) => `${p.puzzle_id}#${p.repeat}`))];
-  const labels = rows.map((r) => r.label);
+  const finding = findingSentence(rows);
 
   return (
-    <div className="dash">
-      <div className="tabs">
-        {SETS.map(([k, l]) => (
-          <button key={k} className={`tab ${set === k ? "tab-on" : ""}`} onClick={() => setSet(k)}>{l}</button>
-        ))}
-        <span className="muted small">{summary.trial_count} trials recorded ({mode})</span>
+    <div>
+      <div className="page-head">
+        <div>
+          <h1>Benchmark results</h1>
+          <p className="page-sub">
+            {rows.length > 0
+              ? <>{SET_LABEL[set]} set, {SET_DESC[set]}. {rows.reduce((a, r) => a + r.trials, 0)} trials of {rows.length} engines on {puzzleCount} puzzles. </>
+              : null}
+            Limit {config.rules.max_moves} moves or {fmtLimit(config.rules.time_limit_s)} per game; ad-hoc demo races are excluded.
+            {mode === "mock" && <b> Showing mock data.</b>}
+          </p>
+        </div>
       </div>
 
-      {rows.length === 0 ? <div className="empty">No trials in this set yet.</div> : (
+      <div className="tabs" role="tablist" aria-label="Test set">
+        {SETS.map((k) => (
+          <button key={k} role="tab" className="tab" aria-selected={set === k} onClick={() => setSet(k)}>{SET_LABEL[k]}</button>
+        ))}
+      </div>
+
+      {state === "loading" && <div className="empty-state" aria-busy="true"><h2>Loading results</h2><p>Reading the recorded trials.</p></div>}
+      {state === "error" && (
+        <div className="empty-state" role="alert"><h2>Couldn't load results</h2><p>The server did not return /api/summary. Check that the backend is running, then switch tabs to retry.</p></div>
+      )}
+      {state === "ok" && rows.length === 0 && (
+        <div className="empty-state">
+          <h2>No {mode} trials in this set yet</h2>
+          <p>Run this set from the Race view with Run benchmark. Results appear here as soon as each race finishes.</p>
+        </div>
+      )}
+
+      {state === "ok" && rows.length > 0 && (
         <>
-          <div className="tiles">
-            <Tile title="Fastest decisions" value={h.fastest?.label} sub={fmtLatency(h.fastest?.mean_latency_s)} />
-            <Tile title="Highest solve rate" value={h.bestSolve?.label} sub={pct(h.bestSolve?.solve_rate)} />
-            <Tile title="Closest to optimal" value={h.bestGap?.label ?? "nobody solved"} sub={h.bestGap ? `gap ${gapFmt(h.bestGap.mean_gap)}` : ""} />
-            <Tile title="Fastest = best quality?" value={h.fastestIsBest ? "Yes" : "No"} sub="speed vs. solution quality" />
+          <section className="panel findings" aria-label="Answers">
+            <div className="finding">
+              <div className="finding-q">Fastest decisions</div>
+              <div className="finding-a">{h.fastest?.label ?? "–"}</div>
+              <div className="finding-e num">{fmtLatency(h.fastest?.mean_latency_s)} per move</div>
+            </div>
+            <div className="finding">
+              <div className="finding-q">Highest solve rate</div>
+              <div className="finding-a">{h.bestSolve?.label ?? "–"}</div>
+              <div className="finding-e num">{pct(h.bestSolve?.solve_rate)}, {h.bestSolve?.solved} of {h.bestSolve?.trials}</div>
+            </div>
+            <div className="finding">
+              <div className="finding-q">Closest to the shortest solution</div>
+              <div className="finding-a">{h.bestGap?.label ?? "No engine solved a cube"}</div>
+              <div className="finding-e num">{h.bestGap ? `${gapFmt(h.bestGap.mean_gap)} moves on average, ${h.bestGap.zero_gap} optimal` : ""}</div>
+            </div>
+            <div className="finding">
+              <div className="finding-q">Was the fastest also the best?</div>
+              <div className="finding-a">{h.fastestIsBest ? "Yes" : "No"}</div>
+              <div className="finding-e">
+                {h.fastest && `${h.fastest.label} solved ${h.fastest.solved} of ${h.fastest.trials}`}
+              </div>
+            </div>
+          </section>
+
+          <div className="dash-grid">
+            <section className="panel">
+              <div className="panel-head">
+                <h2 className="panel-title">Speed against success</h2>
+                <span className="panel-note">one point per engine</span>
+              </div>
+              {finding && <p className="page-sub" style={{ padding: "0 16px", margin: "0 0 4px" }}>{finding.head}</p>}
+              <div className="chart-body"><TradeoffPlot rows={rows} height={372} /></div>
+            </section>
+            <section className="panel">
+              <div className="panel-head">
+                <h2 className="panel-title">Latency per move</h2>
+                <span className="panel-note">mean over every decision, lower is faster</span>
+              </div>
+              <div className="chart-body">
+                <RankedBars rows={rows} value={(r) => r.mean_latency_s} fmt={(v) => fmtLatency(v)} tickFmt={(v) => (v === 0 ? "0" : fmtLatency(v))} better="lower" name="Avg latency" />
+              </div>
+              <div className="panel-head" style={{ paddingTop: 4 }}>
+                <h2 className="panel-title">Success rate</h2>
+                <span className="panel-note">cubes solved within the limits</span>
+              </div>
+              <div className="chart-body">
+                <RankedBars rows={rows} value={(r) => r.solve_rate * 100} fmt={(v) => `${Math.round(v)}%`} better="higher" name="Success" max={100} />
+              </div>
+            </section>
           </div>
 
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Model</th><th>Type</th><th>Trials</th><th>Success rate</th>
-                <th>Avg latency / move</th><th>Median</th><th>p95</th>
-                <th>Avg total time</th><th>Avg moves</th><th>Avg moves (solved) vs optimal</th>
-                <th>Optimality gap</th><th>Gap = 0</th><th>Invalid outputs</th><th>Retries</th><th>Cost</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.model_key}>
-                  <td><span className="dot" style={{ background: MODEL_COLOR[r.model_key] }} />{r.label}</td>
-                  <td>{r.kind === "llm" ? "Frontier LLM" : "Decision"}</td>
-                  <td>{r.trials}</td>
-                  <td><b>{pct(r.solve_rate)}</b> <span className="muted">({r.solved}/{r.trials})</span></td>
-                  <td><b>{fmtLatency(r.mean_latency_s)}</b></td>
-                  <td>{fmtLatency(r.median_latency_s)}</td>
-                  <td>{fmtLatency(r.p95_latency_s)}</td>
-                  <td>{fmtTime(r.mean_total_time_s)}</td>
-                  <td>{num(r.mean_moves)}</td>
-                  <td>{num(r.mean_moves_solved)} vs {num(r.mean_optimal_solved)}</td>
-                  <td><b>{gapFmt(r.mean_gap)}</b></td>
-                  <td>{r.zero_gap}</td>
-                  <td>{r.invalid_outputs}</td>
-                  <td>{r.retries}</td>
-                  <td>${r.cost_usd.toFixed(3)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          <div className="charts">
-            <ChartBox title="Avg latency per move (s, log scale)">
-              <BarChart data={chart}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="name" /><YAxis scale="log" domain={["auto", "auto"]} allowDataOverflow />
-                <Tooltip formatter={(v: number) => fmtLatency(v)} />
-                <Bar dataKey="latency">{chart.map((c) => <Cell key={c.key} fill={MODEL_COLOR[c.key]} />)}</Bar>
-              </BarChart>
-            </ChartBox>
-            <ChartBox title="Success rate (%)">
-              <BarChart data={chart}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="name" /><YAxis domain={[0, 100]} />
-                <Tooltip />
-                <Bar dataKey="solve">{chart.map((c) => <Cell key={c.key} fill={MODEL_COLOR[c.key]} />)}</Bar>
-              </BarChart>
-            </ChartBox>
-            <ChartBox title="Moves used vs shortest solution (solved games)">
-              <BarChart data={chart}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="name" /><YAxis />
-                <Tooltip /><Legend />
-                <Bar dataKey="moves" name="model moves" fill="#6366f1" />
-                <Bar dataKey="optimal" name="shortest" fill="#cbd5e1" />
-              </BarChart>
-            </ChartBox>
-            <ChartBox title="Avg total game time (s)">
-              <BarChart data={chart}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="name" /><YAxis />
-                <Tooltip formatter={(v: number) => fmtTime(v)} />
-                <Bar dataKey="total">{chart.map((c) => <Cell key={c.key} fill={MODEL_COLOR[c.key]} />)}</Bar>
-              </BarChart>
-            </ChartBox>
-          </div>
-
-          <h3>Per-puzzle results</h3>
-          <table className="table small">
-            <thead>
-              <tr><th>Puzzle</th><th>Shortest</th>{labels.map((l) => <th key={l}>{l}</th>)}</tr>
-            </thead>
-            <tbody>
-              {puzzleIds.map((pid) => {
-                const cells = puzzleRows.filter((p) => `${p.puzzle_id}#${p.repeat}` === pid);
-                return (
-                  <tr key={pid}>
-                    <td className="mono">{pid.replace("#1", "").replace("#", " r")}</td>
-                    <td>{cells[0]?.optimal_length}{cells[0]?.optimal_exact ? "" : "*"}</td>
-                    {labels.map((l) => {
-                      const c = cells.find((x) => x.label === l);
-                      if (!c) return <td key={l}>–</td>;
-                      return (
-                        <td key={l} className={c.status === "solved" ? "ok" : "bad"}>
-                          {c.status === "solved" ? `✓ ${c.moves} (gap ${c.gap >= 0 ? "+" : ""}${c.gap})` :
-                            `✗ ${c.status === "out_of_time" ? "time" : c.status === "out_of_moves" ? "moves" : c.status}`}
-                          <span className="muted"> · {fmtTime(c.total_time_s)}</span>
-                        </td>
-                      );
-                    })}
+          <section className="panel">
+            <div className="panel-head">
+              <h2 className="panel-title">All metrics</h2>
+              <span className="panel-note">best value per column in blue</span>
+            </div>
+            <div className="table-wrap">
+              <table className="table metrics">
+                <thead>
+                  <tr>
+                    <th rowSpan={2} style={{ verticalAlign: "bottom" }}>Engine</th>
+                    {GROUPS.map((g) => <th key={g.name} colSpan={g.cols.length} className="group">{g.name}</th>)}
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          <p className="muted small">* extension-set reference is a best-known upper bound, not a proven optimum.</p>
+                  <tr>{GROUPS.flatMap((g) => g.cols.map((c) => <th key={c.key} className="r">{c.head}</th>))}</tr>
+                </thead>
+                <tbody>
+                  {rows.map((r, i) => (
+                    <tr key={r.model_key}>
+                      <td>
+                        <span className="engine-cell">
+                          <span className="swatch" style={{ background: engineColor(r.model_key, i) }} aria-hidden="true" />
+                          {r.label}
+                          <span className="muted" style={{ fontWeight: 400 }}>{KIND_SHORT[r.kind]}</span>
+                        </span>
+                      </td>
+                      {GROUPS.flatMap((g) => g.cols.map((c) => (
+                        <td key={c.key} className={`r num ${bestKey(rows, c) === r.model_key ? "best" : ""}`}>{c.fmt(r)}</td>
+                      )))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="foot-note">
+              Optimality gap = moves used − exact shortest moves, averaged over solved games only. Unsolved games hit the
+              move or time limit and have no gap. Latency includes retries.
+            </p>
+          </section>
+
+          <div className="dash-grid section-gap">
+            <section className="panel">
+              <div className="panel-head">
+                <h2 className="panel-title">Moves used against the shortest solution</h2>
+                <span className="legend">
+                  <span><span className="swatch" style={{ background: "#3f4653" }} />Moves used</span>
+                  <span><span className="swatch" style={{ background: "#c5ccd6" }} />Shortest</span>
+                </span>
+              </div>
+              <div className="chart-body"><MovesVsShortest rows={rows} /></div>
+              <p className="foot-note">Solved games only, averaged per engine over the puzzles it solved.</p>
+            </section>
+            <section className="panel">
+              <div className="panel-head">
+                <h2 className="panel-title">Average game time</h2>
+                <span className="panel-note">from first request to solved or limit</span>
+              </div>
+              <div className="chart-body">
+                <RankedBars rows={rows} value={(r) => r.mean_total_time_s} fmt={(v) => fmtTime(v)} tickFmt={(v) => `${Math.round(v)} s`} better="lower" highlight={false} name="Avg game time" />
+              </div>
+              <p className="foot-note">A fast game is not a good game: engines that hit the move limit also finish quickly.</p>
+            </section>
+          </div>
+
+          <section className="panel section-gap">
+            <div className="panel-head">
+              <h2 className="panel-title">Every trial</h2>
+              <span className="panel-note">moves used, gap to shortest, game time</span>
+            </div>
+            <PuzzleMatrix rows={rows} puzzleRows={puzzleRows} />
+          </section>
         </>
       )}
     </div>
   );
 }
 
-function Tile({ title, value, sub }: { title: string; value?: string; sub?: string }) {
+function PuzzleMatrix({ rows, puzzleRows }: { rows: ModelSummary[]; puzzleRows: any[] }) {
+  const keys = [...new Set(puzzleRows.map((p) => `${p.puzzle_id}#${p.repeat}`))];
   return (
-    <div className="tile">
-      <div className="tile-title">{title}</div>
-      <div className="tile-value">{value ?? "–"}</div>
-      <div className="tile-sub">{sub}</div>
-    </div>
-  );
-}
-
-function ChartBox({ title, children }: { title: string; children: React.ReactElement }) {
-  return (
-    <div className="chart">
-      <div className="chart-title">{title}</div>
-      <ResponsiveContainer width="100%" height={220}>{children}</ResponsiveContainer>
+    <div className="table-wrap">
+      <table className="table">
+        <thead>
+          <tr>
+            <th>Puzzle</th>
+            <th className="r">Shortest</th>
+            {rows.map((r, i) => (
+              <th key={r.model_key} className="r">
+                <span className="engine-cell" style={{ justifyContent: "flex-end", fontWeight: 400 }}>
+                  <span className="swatch" style={{ background: engineColor(r.model_key, i) }} aria-hidden="true" />{r.label}
+                </span>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {keys.map((k) => {
+            const cells = puzzleRows.filter((p) => `${p.puzzle_id}#${p.repeat}` === k);
+            const first = cells[0];
+            return (
+              <tr key={k}>
+                <td className="mono">{first.puzzle_id}{first.repeat > 1 ? ` (run ${first.repeat})` : ""}</td>
+                <td className="r num">{first.optimal_length}{first.optimal_exact ? "" : "*"}</td>
+                {rows.map((r) => {
+                  const c = cells.find((x) => x.label === r.label);
+                  if (!c) return <td key={r.model_key} className="r muted">–</td>;
+                  const solved = c.status === "solved";
+                  return (
+                    <td key={r.model_key} className="r num">
+                      <span className={solved ? "cell-ok" : "cell-bad"}>
+                        {solved ? `${c.moves} (${c.gap >= 0 ? "+" : ""}${c.gap})` : c.status === "out_of_time" ? "time limit" : c.status === "out_of_moves" ? "move limit" : c.status}
+                      </span>
+                      <span className="muted"> {fmtTime(c.total_time_s)}</span>
+                    </td>
+                  );
+                })}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {puzzleRows.some((p) => !p.optimal_exact) && <p className="foot-note">* Extension puzzles use a best-known length, not a proven optimum.</p>}
     </div>
   );
 }

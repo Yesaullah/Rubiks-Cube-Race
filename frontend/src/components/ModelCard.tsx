@@ -1,79 +1,111 @@
-import { memo, useEffect, useRef } from "react";
+import { memo } from "react";
 import Cube3D from "../cube/Cube3D";
 import CubeNet from "../cube/CubeNet";
 import { fmtLatency, fmtTime } from "../race";
 import type { GameView } from "../types";
+import { KIND_LABEL, engineColor } from "./stats";
 
 const MemoCube = memo(Cube3D);
+const ORDINAL = ["", "1st", "2nd", "3rd", "4th", "5th", "6th"];
+const TAPE_SLOTS = 30;
 
-const STATUS_TEXT: Record<string, string> = {
-  waiting: "ready",
-  solved: "SOLVED ✓",
-  out_of_moves: "RAN OUT OF MOVES",
-  out_of_time: "OUT OF TIME",
-  budget_stop: "BUDGET STOP",
-  api_error: "API ERROR",
-};
+function stateLine(g: GameView, clock: number, optimal: number) {
+  switch (g.status) {
+    case "waiting":
+      return { tone: "", text: "Ready: same scramble, same rules as the other engines" };
+    case "thinking":
+      return {
+        tone: "",
+        busy: true,
+        text: g.kind === "llm" ? "Reasoning about the next move" : "Choosing the next move",
+        figure: `${Math.max(0, clock - g.since).toFixed(1)} s`,
+      };
+    case "solved": {
+      const over = g.gap ?? g.moves - optimal;
+      return {
+        tone: "ok",
+        text: over === 0 ? `Solved in ${g.moves} moves, the shortest possible` : `Solved in ${g.moves} moves, ${over} over the shortest`,
+      };
+    }
+    case "out_of_moves":
+      return { tone: "bad", text: `Not solved: used all ${g.moves + g.forfeits} moves` };
+    case "out_of_time":
+      return { tone: "bad", text: "Not solved: game time limit reached" };
+    case "budget_stop":
+      return { tone: "bad", text: "Stopped: benchmark budget reached" };
+    case "api_error":
+      return { tone: "bad", text: "Stopped: the API rejected the request" };
+  }
+}
 
-const RANK = ["", "1ST", "2ND", "3RD", "4TH"];
-
-export default function ModelCard({ g, clock, maxMoves, showNet }: {
-  g: GameView; clock: number; maxMoves: number; showNet: boolean;
+export default function EngineLane({ g, index, clock, maxMoves, optimal, showNet }: {
+  g: GameView; index: number; clock: number; maxMoves: number; optimal: number; showNet: boolean;
 }) {
   const finished = g.endT !== null;
   const time = finished ? g.endT : g.status === "waiting" ? 0 : clock;
-  const thinking = g.status === "thinking";
-  const solved = g.status === "solved";
   const last = g.history[g.history.length - 1];
-  const histRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    histRef.current?.scrollTo({ left: histRef.current.scrollWidth, behavior: "smooth" });
-  }, [g.history.length]);
+  const state = stateLine(g, clock, optimal);
+  const slots = Math.max(TAPE_SLOTS, maxMoves);
 
   return (
-    <div className={`card ${solved ? "card-solved" : ""} ${finished && !solved ? "card-failed" : ""} ${g.rank === 1 ? "card-winner" : ""}`}>
-      <div className="card-head">
-        <span className="model-name">{g.label}</span>
-        <span className={`badge ${g.kind === "llm" ? "badge-llm" : "badge-decision"}`}>
-          {g.kind === "llm" ? "LLM" : "DECISION MODEL"}
-        </span>
-        <span className="model-id">{g.model_id}</span>
-      </div>
-      <div className="card-body">
-        <div className="cube-area">
-          <MemoCube facelets={g.facelets} move={g.lastMove} seq={g.moveSeq} />
-          {g.rank !== null && <div className={`medal medal-${g.rank}`}>{RANK[g.rank]}</div>}
-          {finished && <div className={`ribbon ${solved ? "ribbon-ok" : "ribbon-bad"}`}>{STATUS_TEXT[g.status]}</div>}
-          {showNet && <div className="net"><CubeNet facelets={g.facelets} /></div>}
-        </div>
-        <div className={`stats ${solved ? "stats-ok" : finished ? "stats-bad" : ""}`}>
-          <div className="stat-label">TIME</div>
-          <div className="stat-big mono">{fmtTime(time)}</div>
-          <div className="stat-label">MOVES</div>
-          <div className="stat-big mono">
-            {g.moves}
-            <span className="stat-small">/{maxMoves}</span>
-          </div>
-          {g.forfeits > 0 && <div className="stat-note">{g.forfeits} forfeited</div>}
-          <div className="stat-label">LAST MOVE</div>
-          <div className="stat-move mono">{last?.move ?? (last ? "✗" : "–")}</div>
-          <div className="stat-note">
-            {last ? fmtLatency(last.latency) : ""}
-            {last?.confidence != null ? ` · conf ${(last.confidence * 100).toFixed(0)}%` : ""}
-          </div>
-          <div className={`stat-status ${thinking ? "pulse" : ""}`}>
-            {thinking ? (g.kind === "llm" ? "thinking…" : "deciding…") : STATUS_TEXT[g.status] ?? g.status}
-          </div>
-        </div>
-      </div>
-      <div className="history" ref={histRef}>
-        {g.history.length === 0 && <span className="history-empty">move history</span>}
-        {g.history.map((h, i) => (
-          <span key={i} className={`chip ${h.move ? "" : "chip-bad"}`} title={fmtLatency(h.latency)}>
-            {h.move ?? "✗"}
+    <section className="panel lane" aria-label={`${g.label} lane`}>
+      <header className="lane-head">
+        <span className="swatch" style={{ background: engineColor(g.key, index) }} aria-hidden="true" />
+        <h2 className="lane-name">{g.label}</h2>
+        <span className="lane-kind">{KIND_LABEL[g.kind]}</span>
+        {g.rank !== null && (
+          <span className={`lane-rank ${g.rank === 1 ? "lane-rank-1" : ""}`} aria-label={`Ranked ${ORDINAL[g.rank]}`}>
+            {ORDINAL[g.rank]}
           </span>
-        ))}
+        )}
+      </header>
+
+      <div className="lane-body">
+        <div className="cube-well">
+          <MemoCube facelets={g.facelets} move={g.lastMove} seq={g.moveSeq} />
+          {showNet && <div className="cube-net"><CubeNet facelets={g.facelets} size={6} /></div>}
+        </div>
+        <dl className="readout">
+          <div>
+            <dt className="readout-label">Time</dt>
+            <dd className="readout-value" style={{ margin: 0 }}>{fmtTime(time)}</dd>
+          </div>
+          <div>
+            <dt className="readout-label">Moves</dt>
+            <dd className="readout-value" style={{ margin: 0 }}>
+              {g.moves}<span className="readout-of"> / {maxMoves}</span>
+            </dd>
+          </div>
+          <div>
+            <dt className="readout-label" title="Latency of the decision, and the model's confidence when it reports one">Last move</dt>
+            <dd className="readout-value small" style={{ margin: 0 }}>{last ? last.move ?? "invalid" : "–"}</dd>
+            <dd className="readout-sub" style={{ margin: 0 }}>
+              {last ? fmtLatency(last.latency) : ""}
+              {last?.confidence != null ? `, ${Math.round(last.confidence * 100)}%` : ""}
+            </dd>
+          </div>
+        </dl>
       </div>
-    </div>
+
+      <div className={`lane-state ${state.tone === "ok" ? "lane-state-ok" : state.tone === "bad" ? "lane-state-bad" : ""}`}
+        role="status" aria-live="polite">
+        {state.busy && <span className="busy" aria-hidden="true" />}
+        <span>{state.text}</span>
+        {state.figure && <span className="num">{state.figure}</span>}
+      </div>
+
+      <ol className="tape" aria-label={`Moves played, ${g.history.length} of ${slots}. Shaded slots mark the shortest solution, ${optimal} moves.`}>
+        {Array.from({ length: slots }, (_, i) => {
+          const h = g.history[i];
+          const cls = ["slot", i < optimal ? "slot-par" : "", h ? (h.move ? "slot-played" : "slot-forfeit") : "",
+            h && i === g.history.length - 1 ? "slot-new" : ""].join(" ");
+          return (
+            <li key={i} className={cls} title={h ? `Move ${i + 1}: ${h.move ?? "invalid output"}, ${fmtLatency(h.latency)}` : undefined}>
+              {h ? h.move ?? "×" : ""}
+            </li>
+          );
+        })}
+      </ol>
+    </section>
   );
 }

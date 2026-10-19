@@ -10,7 +10,7 @@ export const NORMALS: Record<string, Vec3> = {
 };
 
 export const COLORS: Record<string, string> = {
-  U: "#f4f4f2", R: "#d9262c", F: "#18a34a", D: "#ffd31a", L: "#ff7a00", B: "#1d5bd6",
+  U: "#f2f3f1", R: "#c8262f", F: "#16994a", D: "#f5c518", L: "#ef7a12", B: "#1f56c6",
 };
 
 function stickerPos(face: string, r: number, c: number): Vec3 {

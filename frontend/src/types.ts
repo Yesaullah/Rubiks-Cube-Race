@@ -49,6 +49,13 @@ export interface RaceEvent {
   [k: string]: any;
 }
 
+export interface MoveRecord {
+  move: string | null;
+  latency: number;
+  confidence: number | null;
+  t: number;
+}
+
 export interface GameView {
   key: string;
   label: string;
@@ -58,13 +65,26 @@ export interface GameView {
   facelets: string;
   moves: number;
   forfeits: number;
-  history: { move: string | null; latency: number; confidence: number | null }[];
+  history: MoveRecord[];
   moveSeq: number;
   lastMove: string | null;
+  /** race-clock time of the last event for this engine (decision start for "thinking") */
+  since: number;
   endT: number | null;
   invalid: number;
   rank: number | null;
   gap: number | null;
+}
+
+/** One line of the structured event log under the race. */
+export interface LogEntry {
+  id: number;
+  t: number;
+  model: string | null;
+  kind: "start" | "move" | "forfeit" | "end" | "finish";
+  text: string;
+  detail?: string;
+  tone?: "ok" | "bad" | "neutral";
 }
 
 export interface ModelSummary {
