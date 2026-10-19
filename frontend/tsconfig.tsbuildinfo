@@ -1,1 +1,0 @@
-{"root":["./src/app.tsx","./src/api.ts","./src/main.tsx","./src/race.ts","./src/types.ts","./src/components/dashboard.tsx","./src/components/modelcard.tsx","./src/components/raceview.tsx","./src/components/resultsslide.tsx","./src/components/stats.ts","./src/cube/cube3d.tsx","./src/cube/cubenet.tsx","./src/cube/geometry.ts"],"version":"5.8.3"}
