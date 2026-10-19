@@ -81,7 +81,7 @@ export default function EngineLane({ g, index, clock, maxMoves, optimal, showNet
             <dd className="readout-value small" style={{ margin: 0 }}>{last ? last.move ?? "invalid" : "–"}</dd>
             <dd className="readout-sub" style={{ margin: 0 }}>
               {last ? fmtLatency(last.latency) : ""}
-              {last?.confidence != null ? `, ${Math.round(last.confidence * 100)}%` : ""}
+              {last?.confidence != null && <span className="readout-conf">{Math.round(last.confidence * 100)}% confidence</span>}
             </dd>
           </div>
         </dl>
@@ -94,6 +94,10 @@ export default function EngineLane({ g, index, clock, maxMoves, optimal, showNet
         {state.figure && <span className="num">{state.figure}</span>}
       </div>
 
+      <div className="tape-head">
+        <span>Moves played <span className="num">{g.history.length}</span> of <span className="num">{slots}</span></span>
+        <span className="tape-key"><span className="tape-key-par" aria-hidden="true" />Shortest solution: <span className="num">{optimal}</span></span>
+      </div>
       <ol className="tape" aria-label={`Moves played, ${g.history.length} of ${slots}. Shaded slots mark the shortest solution, ${optimal} moves.`}>
         {Array.from({ length: slots }, (_, i) => {
           const h = g.history[i];

@@ -5,10 +5,22 @@ import {
 import type { ModelSummary } from "../types";
 import { engineColor } from "./stats";
 
+// chart colours come from the design tokens in styles.css, so charts, legends and tables agree
 const GRID = "var(--rule)";
-const INK = "#3f4653";
-const DATA = "#1d5fbf";
-const PALE = "#c5ccd6";
+const INK = "var(--series)";
+const DATA = "var(--data)";
+const PALE = "var(--series-pale)";
+
+/** Round axis ticks (steps of 1, 2, 2.5 or 5 × 10^k) from zero up to just past the largest value. */
+function niceTicks(max: number, target = 4): number[] {
+  if (!(max > 0)) return [0, 1];
+  const raw = max / target;
+  const mag = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw)!;
+  const ticks: number[] = [];
+  for (let v = 0; v < max + step * 0.999; v += step) ticks.push(Number(v.toFixed(10)));
+  return ticks;
+}
 
 function Tip({ active, payload, fmt }: any) {
   if (!active || !payload?.length) return null;
@@ -27,8 +39,7 @@ function Tip({ active, payload, fmt }: any) {
 function ValueLabel({ x, y, width, height, value, fmt }: any) {
   if (value == null) return null;
   return (
-    <text x={x + width + 6} y={y + height / 2} dominantBaseline="central"
-      style={{ fontFamily: "var(--font-mono)", fontSize: 12, fill: "var(--ink)" }}>
+    <text x={x + width + 6} y={y + height / 2} dominantBaseline="central" className="chart-value">
       {fmt(value)}
     </text>
   );
@@ -39,8 +50,8 @@ function EngineTick({ x, y, payload, rows }: any) {
   const i = rows.indexOf(row);
   return (
     <g transform={`translate(${x},${y})`}>
-      <rect x={-112} y={-4} width={8} height={8} rx={1} fill={row ? engineColor(row.model_key, i) : PALE} />
-      <text x={-98} y={4} style={{ fontFamily: "var(--font)", fontSize: 12, fill: "var(--ink)" }}>{payload.value}</text>
+      <rect x={-112} y={-5} width={10} height={10} rx={2} fill={row ? engineColor(row.model_key, i) : PALE} />
+      <text x={-96} y={4.5} className="chart-engine">{payload.value}</text>
     </g>
   );
 }
@@ -69,12 +80,13 @@ export function RankedBars({ rows, value, fmt, tickFmt, better, name, max, highl
     });
   const best = highlight ? data.find((d) => d.v != null)?.key : undefined;
   const plotted = data.map((d) => ({ ...d, v: d.v ?? 0, missing: d.v == null }));
+  const ticks = max === 100 ? [0, 25, 50, 75, 100] : niceTicks(Math.max(0, ...plotted.map((d) => d.v)));
   return (
     <ResponsiveContainer width="100%" height={36 * data.length + 34}>
-      <BarChart data={plotted} layout="vertical" margin={{ top: 4, right: 64, bottom: 0, left: 8 }} barCategoryGap={8}>
+      <BarChart data={plotted} layout="vertical" margin={{ top: 4, right: 72, bottom: 0, left: 8 }} barCategoryGap={8}>
         <CartesianGrid horizontal={false} stroke={GRID} />
-        <XAxis type="number" domain={[0, max ?? "auto"]} tickFormatter={tickFmt ?? fmt} axisLine={false} tickLine={false} minTickGap={20}
-          {...(max === 100 ? { ticks: [0, 25, 50, 75, 100] } : { tickCount: 5 })} />
+        <XAxis type="number" domain={[0, max ?? ticks[ticks.length - 1]]} ticks={ticks} tickFormatter={tickFmt ?? fmt}
+          axisLine={false} tickLine={false} interval={0} />
         <YAxis type="category" dataKey="name" width={116} axisLine={false} tickLine={false}
           tick={<EngineTick rows={rows} />} />
         <Tooltip cursor={{ fill: "var(--sunken)" }} content={<Tip fmt={fmt} />} />
@@ -95,11 +107,12 @@ export function MovesVsShortest({ rows }: { rows: ModelSummary[] }) {
     .sort((a, b) => a.moves - a.shortest - (b.moves - b.shortest));
   if (data.length === 0) return <p className="foot-note" style={{ borderTop: 0 }}>No engine solved a cube in this set, so there is nothing to compare.</p>;
   const fmt = (v: number) => v.toFixed(1);
+  const ticks = niceTicks(Math.max(...data.map((d) => Math.max(d.moves, d.shortest))));
   return (
     <ResponsiveContainer width="100%" height={52 * data.length + 34}>
       <BarChart data={data} layout="vertical" margin={{ top: 4, right: 48, bottom: 0, left: 8 }} barGap={2} barCategoryGap={12}>
         <CartesianGrid horizontal={false} stroke={GRID} />
-        <XAxis type="number" domain={[0, "auto"]} axisLine={false} tickLine={false} tickCount={4} minTickGap={20} />
+        <XAxis type="number" domain={[0, ticks[ticks.length - 1]]} ticks={ticks} interval={0} axisLine={false} tickLine={false} />
         <YAxis type="category" dataKey="name" width={116} axisLine={false} tickLine={false}
           tick={<EngineTick rows={rows} />} />
         <Tooltip cursor={{ fill: "var(--sunken)" }} content={<Tip fmt={fmt} />} />
@@ -148,8 +161,8 @@ export function TradeoffPlot({ rows, height = 260 }: { rows: ModelSummary[]; hei
         <Scatter data={data} isAnimationActive={false}
           shape={(p: any) => (
             <g>
-              <circle cx={p.cx} cy={p.cy} r={6} fill={engineColor(p.payload.key, p.payload.i)} stroke="#fff" strokeWidth={2} />
-              <text x={p.cx + 10} y={p.cy + 4} style={{ fontFamily: "var(--font)", fontSize: 12, fill: "var(--ink)", fontWeight: 500 }}>
+              <circle cx={p.cx} cy={p.cy} r={7} fill={engineColor(p.payload.key, p.payload.i)} stroke="#fff" strokeWidth={2} />
+              <text x={p.cx + 11} y={p.cy + 4.5} className="chart-point">
                 {p.payload.name}
               </text>
             </g>

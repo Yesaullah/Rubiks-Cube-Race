@@ -57,12 +57,19 @@ def model_table(rows: list[dict]) -> str:
 def puzzle_table(per_puzzle: list[dict], set_name: str) -> str:
     rows = [p for p in per_puzzle if p["set"] == set_name]
     labels = list(dict.fromkeys(p["label"] for p in rows))
-    keys = list(dict.fromkeys((p["puzzle_id"], p["repeat"]) for p in rows))
+    # one row per race: the same puzzle can be raced more than once, and every trial must be shown
+    def race_of(p: dict) -> str:
+        return p.get("race_id") or f"{p['puzzle_id']}#{p['repeat']}"
+
+    races = list(dict.fromkeys(race_of(p) for p in rows))
+    seen: dict[str, int] = {}
     out = "| Puzzle | Shortest | " + " | ".join(labels) + " |\n|---|---|" + "---|" * len(labels) + "\n"
-    for pid, rep in keys:
-        cells = {p["label"]: p for p in rows if p["puzzle_id"] == pid and p["repeat"] == rep}
+    for rid in races:
+        cells = {p["label"]: p for p in rows if race_of(p) == rid}
         first = next(iter(cells.values()))
-        line = f"| `{pid}`{'' if rep == 1 else f' r{rep}'} | {first['optimal_length']}{'' if first['optimal_exact'] else '*'} |"
+        pid = first["puzzle_id"]
+        seen[pid] = seen.get(pid, 0) + 1
+        line = f"| `{pid}`{'' if seen[pid] == 1 else f' run {seen[pid]}'} | {first['optimal_length']}{'' if first['optimal_exact'] else '*'} |"
         for lab in labels:
             c = cells.get(lab)
             if not c:

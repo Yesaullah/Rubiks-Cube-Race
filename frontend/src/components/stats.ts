@@ -67,6 +67,9 @@ export function findingSentence(rows: ModelSummary[]): { head: string; sub: stri
   };
 }
 
+/** Identity of one race in summary.per_puzzle rows (older records without race_id fall back to puzzle and repeat). */
+export const raceOf = (p: { race_id?: string; puzzle_id: string; repeat: number }) => p.race_id ?? `${p.puzzle_id}#${p.repeat}`;
+
 export const SET_LABEL: Record<string, string> = {
   primary: "Primary",
   warmup: "Warm-up",

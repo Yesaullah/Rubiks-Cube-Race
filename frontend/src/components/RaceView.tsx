@@ -3,6 +3,7 @@ import { api, type Mode } from "../api";
 import { fmtLatency, fmtLimit, fmtTime, type RaceState } from "../race";
 import type { Config, GameView, Puzzle } from "../types";
 import EngineLane from "./ModelCard";
+import DataBadge from "./DataBadge";
 import { SET_LABEL, engineColor } from "./stats";
 
 interface Props {
@@ -18,7 +19,17 @@ interface Props {
   stopReplay: () => void;
 }
 
+/** Stickers that already match their face centre (54 when solved; a fresh scramble leaves ~20 in place). */
 const inPlace = (f: string) => [...f].filter((ch, i) => ch === f[Math.floor(i / 9) * 9 + 4]).length;
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** "primary-03-r1-20261019T193324" -> "primary-03, 19 Oct 19:33" (the id stays the option value). */
+function raceLabel(id: string): string {
+  const m = id.match(/^(.*)-r(\d+)-(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})\d{2}$/);
+  if (!m) return id;
+  const [, pid, rep, , mo, d, hh, mm] = m;
+  return `${pid}${rep !== "1" ? ` run ${rep}` : ""}, ${Number(d)} ${MONTHS[Number(mo) - 1]} ${hh}:${mm}`;
+}
 
 /** Live order: finished ranks first, then solved games, then most stickers in place. */
 function standings(race: RaceState): GameView[] {
@@ -78,18 +89,21 @@ export default function RaceView({ config, puzzles, mode, race, clock, speed, re
   const running = race.raceId !== null && !race.ended;
 
   const phase = replaying
-    ? { label: `Replaying at ${speed}× the recorded speed`, value: fmtTime(clock), live: true }
+    ? { tone: "replay", label: `Replaying at ${speed}× the recorded speed`, value: fmtTime(clock) }
     : running
-      ? { label: race.runKind === "demo" ? "Race in progress (demo run)" : "Race in progress", value: fmtTime(clock), live: true }
+      ? { tone: "live", label: race.runKind === "demo" ? "Race in progress (demo run)" : "Race in progress", value: fmtTime(clock) }
       : race.ended
-        ? { label: "Race finished", value: fmtTime(Math.max(0, ...race.order.map((k) => race.games[k].endT ?? 0))), live: false }
-        : { label: "Ready to race", value: fmtTime(0), live: false };
+        ? { tone: "done", label: "Race finished", value: fmtTime(Math.max(0, ...race.order.map((k) => race.games[k].endT ?? 0))) }
+        : { tone: "ready", label: "Ready to race", value: fmtTime(0) };
 
   return (
     <div>
       <div className="page-head">
         <div>
-          <h1>{puzzle ? `Race on ${puzzle.id}` : "Race"}</h1>
+          <div className="title-row">
+            <h1>{puzzle ? `Race on ${puzzle.id}` : "Race"}</h1>
+            <DataBadge mode={mode} />
+          </div>
           {puzzle && (
             <p className="page-sub">
               {SET_LABEL[puzzle.set]} set. Scramble <span className="mono">{puzzle.scramble.join(" ")}</span>,
@@ -98,14 +112,14 @@ export default function RaceView({ config, puzzles, mode, race, clock, speed, re
             </p>
           )}
         </div>
-        <div className={`phase ${phase.live ? "phase-live" : ""}`} role="status">
-          <div className="phase-label">{phase.label}</div>
+        <div className={`phase phase-${phase.tone}`} role="status">
+          <div className="phase-label"><span className="phase-dot" aria-hidden="true" />{phase.label}</div>
           <div className="phase-value">{phase.value}</div>
         </div>
       </div>
 
-      <div className="toolbar">
-        <div className="toolbar-group">
+      <div className="toolbar" role="toolbar" aria-label="Race controls">
+        <div className="toolbar-group" aria-label="Single race">
           <label className="field">
             <span className="field-label">Puzzle</span>
             <select className="select" value={puzzleId} onChange={(e) => setPuzzleId(e.target.value)}>
@@ -118,10 +132,9 @@ export default function RaceView({ config, puzzles, mode, race, clock, speed, re
             Run race
           </button>
         </div>
-        <div className="toolbar-group">
+        <div className="toolbar-group" aria-label="Benchmark run">
           <label className="field">
-            <span className="field-label">Benchmark</span>
-            <select className="select" value={suiteSet} onChange={(e) => setSuiteSet(e.target.value)}>
+            <select className="select" aria-label="Benchmark set" value={suiteSet} onChange={(e) => setSuiteSet(e.target.value)}>
               <option value="warmup">Warm-up set</option>
               <option value="primary">Primary set</option>
               <option value="extension">Extension set</option>
@@ -133,13 +146,13 @@ export default function RaceView({ config, puzzles, mode, race, clock, speed, re
           </button>
           {job.running && <button className="btn btn-danger" onClick={() => act(api.stop())}>Stop</button>}
         </div>
-        <div className="toolbar-group">
+        <div className="toolbar-group" aria-label="Replay a saved race">
           <label className="field">
             <span className="field-label">Replay</span>
-            <select className="select" value={replayId} onFocus={refreshRaces} onChange={(e) => setReplayId(e.target.value)}
+            <select className="select select-replay" value={replayId} title={replayId} onFocus={refreshRaces} onChange={(e) => setReplayId(e.target.value)}
               disabled={races.length === 0}>
               {races.length === 0 && <option value="">No saved races yet</option>}
-              {races.map((r) => <option key={r.race_id} value={r.race_id}>{r.race_id}</option>)}
+              {races.map((r) => <option key={r.race_id} value={r.race_id}>{raceLabel(r.race_id)}</option>)}
             </select>
           </label>
           <select className="select select-narrow" aria-label="Replay speed" value={replaySpeed} onChange={(e) => setReplaySpeed(Number(e.target.value))}>
@@ -150,7 +163,7 @@ export default function RaceView({ config, puzzles, mode, race, clock, speed, re
             : <button className="btn" disabled={!replayId || job.running} onClick={doReplay}>Replay</button>}
         </div>
         <label className="toolbar-check">
-          <input type="checkbox" checked={showNet} onChange={(e) => setShowNet(e.target.checked)} /> Show unfolded nets
+          <input type="checkbox" checked={showNet} onChange={(e) => setShowNet(e.target.checked)} /> Unfolded nets
         </label>
       </div>
 
@@ -182,7 +195,7 @@ export default function RaceView({ config, puzzles, mode, race, clock, speed, re
         </div>
       )}
       {mode === "live" && job.spent > 0 && (
-        <p className="muted" style={{ fontSize: 12, marginTop: 12 }}>OpenRouter spend this session: <span className="num">${job.spent.toFixed(3)}</span></p>
+        <p className="spend">OpenRouter spend this session: <span className="num">${job.spent.toFixed(3)}</span></p>
       )}
     </div>
   );
@@ -190,27 +203,33 @@ export default function RaceView({ config, puzzles, mode, race, clock, speed, re
 
 function Standings({ race }: { race: RaceState }) {
   const rows = standings(race);
+  const started = race.raceId !== null;
+  const note = race.ended ? "Final" : started ? "Live order, not final" : "Not started";
   return (
     <section className="panel">
       <div className="panel-head">
         <h2 className="panel-title">Standings</h2>
-        <span className="panel-note">{race.ended ? "Final" : "Provisional"}</span>
+        <span className={`panel-note ${race.ended ? "note-strong" : ""}`}>{note}</span>
       </div>
-      <table className="table">
+      <table className="table standings">
         <thead>
           <tr>
+            <th className="r"><span className="sr-only">Position</span>#</th>
             <th>Engine</th>
             <th className="r">Moves</th>
-            <th className="r" title="Stickers matching their face centre, out of 54">In place</th>
-            <th className="r">Avg / move</th>
+            <th className="r" title="Stickers that match their face centre, out of 54. A solved cube has all 54.">Stickers</th>
+            <th className="r" title="Mean decision latency per move so far">Latency</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((g) => {
+          {rows.map((g, i) => {
             const lat = g.history.length ? g.history.reduce((a, h) => a + h.latency, 0) / g.history.length : null;
             const done = g.endT !== null;
+            // a position appears only once there is something to rank; final ranks come from the server
+            const pos = g.rank ?? (started && g.history.length > 0 ? i + 1 : null);
             return (
               <tr key={g.key}>
+                <td className={`r num ${g.rank === null ? "muted" : ""}`}>{pos ?? "–"}</td>
                 <td>
                   <span className="engine-cell">
                     <span className="swatch" style={{ background: engineColor(g.key, race.order.indexOf(g.key)) }} aria-hidden="true" />
@@ -218,13 +237,14 @@ function Standings({ race }: { race: RaceState }) {
                   </span>
                 </td>
                 <td className={`r num ${done ? (g.status === "solved" ? "cell-ok" : "cell-bad") : ""}`}>{g.moves}</td>
-                <td className="r num">{inPlace(g.facelets)}</td>
+                <td className="r num">{inPlace(g.facelets)}<span className="of">/54</span></td>
                 <td className="r num">{fmtLatency(lat)}</td>
               </tr>
             );
           })}
         </tbody>
       </table>
+      <p className="panel-foot">Latency: mean time per decision. Stickers: faces already in place, 54 = solved.</p>
     </section>
   );
 }

@@ -3,7 +3,8 @@ import { api, type Mode } from "../api";
 import { fmtLatency, fmtLimit, fmtTime } from "../race";
 import type { Config, ModelSummary, Summary } from "../types";
 import { MovesVsShortest, RankedBars, TradeoffPlot } from "./charts";
-import { KIND_SHORT, SET_DESC, SET_LABEL, engineColor, findingSentence, gapFmt, highlights, num, pct } from "./stats";
+import DataBadge from "./DataBadge";
+import { KIND_SHORT, SET_DESC, SET_LABEL, engineColor, findingSentence, gapFmt, highlights, num, pct, raceOf } from "./stats";
 
 const SETS = ["primary", "warmup", "extension", "all"] as const;
 
@@ -17,20 +18,25 @@ type Col = {
 
 const GROUPS: { name: string; cols: Col[] }[] = [
   {
-    name: "Speed",
+    name: "Decision latency, per move",
     cols: [
-      { key: "lat", head: "Avg / move", get: (r) => r.mean_latency_s, fmt: (r) => fmtLatency(r.mean_latency_s), better: "lower" },
+      { key: "lat", head: "Mean", get: (r) => r.mean_latency_s, fmt: (r) => fmtLatency(r.mean_latency_s), better: "lower" },
       { key: "med", head: "Median", get: (r) => r.median_latency_s, fmt: (r) => fmtLatency(r.median_latency_s) },
       { key: "p95", head: "p95", get: (r) => r.p95_latency_s, fmt: (r) => fmtLatency(r.p95_latency_s) },
+    ],
+  },
+  {
+    name: "Per game",
+    cols: [
       { key: "tot", head: "Avg game time", get: (r) => r.mean_total_time_s, fmt: (r) => fmtTime(r.mean_total_time_s) },
+      { key: "mv", head: "Avg moves, all games", get: (r) => r.mean_moves, fmt: (r) => num(r.mean_moves) },
     ],
   },
   {
     name: "Solution quality",
     cols: [
-      { key: "sr", head: "Success", get: (r) => r.solve_rate, fmt: (r) => `${pct(r.solve_rate)} (${r.solved}/${r.trials})`, better: "higher" },
-      { key: "mv", head: "Avg moves", get: (r) => r.mean_moves, fmt: (r) => num(r.mean_moves) },
-      { key: "mvs", head: "Solved: moves vs shortest", get: (r) => r.mean_moves_solved, fmt: (r) => r.mean_moves_solved == null ? "–" : `${num(r.mean_moves_solved)} vs ${num(r.mean_optimal_solved)}` },
+      { key: "sr", head: "Success rate", get: (r) => r.solve_rate, fmt: (r) => `${pct(r.solve_rate)} (${r.solved}/${r.trials})`, better: "higher" },
+      { key: "mvs", head: "Moves vs shortest, solved", get: (r) => r.mean_moves_solved, fmt: (r) => r.mean_moves_solved == null ? "–" : `${num(r.mean_moves_solved)} vs ${num(r.mean_optimal_solved)}` },
       { key: "gap", head: "Optimality gap", get: (r) => r.mean_gap, fmt: (r) => gapFmt(r.mean_gap), better: "lower" },
       { key: "z", head: "Optimal solves", get: (r) => r.zero_gap, fmt: (r) => String(r.zero_gap), better: "higher" },
     ],
@@ -65,7 +71,8 @@ export default function Dashboard({ mode, config, refreshKey }: { mode: Mode; co
 
   const rows = summary ? (set === "all" ? summary.overall : summary.by_set[set] ?? []) : [];
   const puzzleRows = summary ? summary.per_puzzle.filter((p) => set === "all" || p.set === set) : [];
-  const puzzleCount = new Set(puzzleRows.map((p) => `${p.puzzle_id}#${p.repeat}`)).size;
+  const puzzleCount = new Set(puzzleRows.map((p) => p.puzzle_id)).size;
+  const raceCount = new Set(puzzleRows.map(raceOf)).size;
   const h = highlights(rows);
   const finding = findingSentence(rows);
 
@@ -73,13 +80,16 @@ export default function Dashboard({ mode, config, refreshKey }: { mode: Mode; co
     <div>
       <div className="page-head">
         <div>
-          <h1>Benchmark results</h1>
+          <div className="title-row">
+            <h1>Benchmark results</h1>
+            <DataBadge mode={mode} />
+          </div>
           <p className="page-sub">
             {rows.length > 0
-              ? <>{SET_LABEL[set]} set, {SET_DESC[set]}. {rows.reduce((a, r) => a + r.trials, 0)} trials of {rows.length} engines on {puzzleCount} puzzles. </>
+              ? <>{SET_LABEL[set]} set, {SET_DESC[set]}. {rows.reduce((a, r) => a + r.trials, 0)} trials: {rows.length} engines × {raceCount} races
+                {raceCount !== puzzleCount ? ` on ${puzzleCount} puzzles` : ""}. </>
               : null}
             Limit {config.rules.max_moves} moves or {fmtLimit(config.rules.time_limit_s)} per game; ad-hoc demo races are excluded.
-            {mode === "mock" && <b> Showing mock data.</b>}
           </p>
         </div>
       </div>
@@ -143,7 +153,7 @@ export default function Dashboard({ mode, config, refreshKey }: { mode: Mode; co
                 <span className="panel-note">mean over every decision, lower is faster</span>
               </div>
               <div className="chart-body">
-                <RankedBars rows={rows} value={(r) => r.mean_latency_s} fmt={(v) => fmtLatency(v)} tickFmt={(v) => (v === 0 ? "0" : fmtLatency(v))} better="lower" name="Avg latency" />
+                <RankedBars rows={rows} value={(r) => r.mean_latency_s} fmt={(v) => fmtLatency(v)} tickFmt={(v) => (v === 0 ? "0" : v < 1 ? `${Math.round(v * 1000)} ms` : `${+v.toFixed(2)} s`)} better="lower" name="Avg latency" />
               </div>
               <div className="panel-head" style={{ paddingTop: 4 }}>
                 <h2 className="panel-title">Success rate</h2>
@@ -164,23 +174,27 @@ export default function Dashboard({ mode, config, refreshKey }: { mode: Mode; co
               <table className="table metrics">
                 <thead>
                   <tr>
-                    <th rowSpan={2} style={{ verticalAlign: "bottom" }}>Engine</th>
-                    {GROUPS.map((g) => <th key={g.name} colSpan={g.cols.length} className="group">{g.name}</th>)}
+                    <th rowSpan={2} className="sticky-col" style={{ verticalAlign: "bottom" }}>Engine</th>
+                    {GROUPS.map((g) => <th key={g.name} colSpan={g.cols.length} className="group group-start">{g.name}</th>)}
                   </tr>
-                  <tr>{GROUPS.flatMap((g) => g.cols.map((c) => <th key={c.key} className="r">{c.head}</th>))}</tr>
+                  <tr>{GROUPS.flatMap((g) => g.cols.map((c, j) => (
+                    <th key={c.key} className={`r wrap ${j === 0 ? "group-start" : ""}`}>{c.head}</th>
+                  )))}</tr>
                 </thead>
                 <tbody>
-                  {rows.map((r, i) => (
+                  {rows.map((r) => (
                     <tr key={r.model_key}>
-                      <td>
+                      <td className="sticky-col">
                         <span className="engine-cell">
-                          <span className="swatch" style={{ background: engineColor(r.model_key, i) }} aria-hidden="true" />
-                          {r.label}
-                          <span className="muted" style={{ fontWeight: 400 }}>{KIND_SHORT[r.kind]}</span>
+                          <span className="swatch" style={{ background: engineColor(r.model_key, config.models.findIndex((m) => m.key === r.model_key)) }} aria-hidden="true" />
+                          <span>
+                            {r.label}
+                            <span className="cell-sub">{KIND_SHORT[r.kind]}</span>
+                          </span>
                         </span>
                       </td>
-                      {GROUPS.flatMap((g) => g.cols.map((c) => (
-                        <td key={c.key} className={`r num ${bestKey(rows, c) === r.model_key ? "best" : ""}`}>{c.fmt(r)}</td>
+                      {GROUPS.flatMap((g) => g.cols.map((c, j) => (
+                        <td key={c.key} className={`r num ${j === 0 ? "group-start" : ""} ${bestKey(rows, c) === r.model_key ? "best" : ""}`}>{c.fmt(r)}</td>
                       )))}
                     </tr>
                   ))}
@@ -198,8 +212,8 @@ export default function Dashboard({ mode, config, refreshKey }: { mode: Mode; co
               <div className="panel-head">
                 <h2 className="panel-title">Moves used against the shortest solution</h2>
                 <span className="legend">
-                  <span><span className="swatch" style={{ background: "#3f4653" }} />Moves used</span>
-                  <span><span className="swatch" style={{ background: "#c5ccd6" }} />Shortest</span>
+                  <span><span className="swatch" style={{ background: "var(--series)" }} />Moves used</span>
+                  <span><span className="swatch" style={{ background: "var(--series-pale)" }} />Shortest</span>
                 </span>
               </div>
               <div className="chart-body"><MovesVsShortest rows={rows} /></div>
@@ -222,7 +236,7 @@ export default function Dashboard({ mode, config, refreshKey }: { mode: Mode; co
               <h2 className="panel-title">Every trial</h2>
               <span className="panel-note">moves used, gap to shortest, game time</span>
             </div>
-            <PuzzleMatrix rows={rows} puzzleRows={puzzleRows} />
+            <PuzzleMatrix rows={rows} puzzleRows={puzzleRows} config={config} />
           </section>
         </>
       )}
@@ -230,31 +244,41 @@ export default function Dashboard({ mode, config, refreshKey }: { mode: Mode; co
   );
 }
 
-function PuzzleMatrix({ rows, puzzleRows }: { rows: ModelSummary[]; puzzleRows: any[] }) {
-  const keys = [...new Set(puzzleRows.map((p) => `${p.puzzle_id}#${p.repeat}`))];
+const STATUS_TEXT: Record<string, string> = {
+  out_of_time: "Time limit",
+  out_of_moves: "Move limit",
+  budget_stop: "Budget stop",
+  api_error: "API error",
+};
+
+function PuzzleMatrix({ rows, puzzleRows, config }: { rows: ModelSummary[]; puzzleRows: any[]; config: Config }) {
+  // one row per race, so a puzzle raced twice shows both runs instead of hiding one
+  const races = [...new Set(puzzleRows.map(raceOf))];
+  const seen: Record<string, number> = {};
   return (
     <div className="table-wrap">
-      <table className="table">
+      <table className="table matrix">
         <thead>
           <tr>
-            <th>Puzzle</th>
+            <th className="sticky-col">Puzzle</th>
             <th className="r">Shortest</th>
-            {rows.map((r, i) => (
+            {rows.map((r) => (
               <th key={r.model_key} className="r">
-                <span className="engine-cell" style={{ justifyContent: "flex-end", fontWeight: 400 }}>
-                  <span className="swatch" style={{ background: engineColor(r.model_key, i) }} aria-hidden="true" />{r.label}
+                <span className="engine-cell" style={{ justifyContent: "flex-end", fontWeight: 500 }}>
+                  <span className="swatch" style={{ background: engineColor(r.model_key, config.models.findIndex((m) => m.key === r.model_key)) }} aria-hidden="true" />{r.label}
                 </span>
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {keys.map((k) => {
-            const cells = puzzleRows.filter((p) => `${p.puzzle_id}#${p.repeat}` === k);
+          {races.map((k) => {
+            const cells = puzzleRows.filter((p) => raceOf(p) === k);
             const first = cells[0];
+            seen[first.puzzle_id] = (seen[first.puzzle_id] ?? 0) + 1;
             return (
               <tr key={k}>
-                <td className="mono">{first.puzzle_id}{first.repeat > 1 ? ` (run ${first.repeat})` : ""}</td>
+                <td className="mono sticky-col">{first.puzzle_id}{seen[first.puzzle_id] > 1 ? <span className="muted"> run {seen[first.puzzle_id]}</span> : null}</td>
                 <td className="r num">{first.optimal_length}{first.optimal_exact ? "" : "*"}</td>
                 {rows.map((r) => {
                   const c = cells.find((x) => x.label === r.label);
@@ -263,9 +287,9 @@ function PuzzleMatrix({ rows, puzzleRows }: { rows: ModelSummary[]; puzzleRows: 
                   return (
                     <td key={r.model_key} className="r num">
                       <span className={solved ? "cell-ok" : "cell-bad"}>
-                        {solved ? `${c.moves} (${c.gap >= 0 ? "+" : ""}${c.gap})` : c.status === "out_of_time" ? "time limit" : c.status === "out_of_moves" ? "move limit" : c.status}
+                        {solved ? <>{c.moves} <span className="gap">{c.gap >= 0 ? "+" : ""}{c.gap}</span></> : STATUS_TEXT[c.status] ?? c.status}
                       </span>
-                      <span className="muted"> {fmtTime(c.total_time_s)}</span>
+                      <span className="cell-time">{fmtTime(c.total_time_s)}</span>
                     </td>
                   );
                 })}
@@ -274,6 +298,7 @@ function PuzzleMatrix({ rows, puzzleRows }: { rows: ModelSummary[]; puzzleRows: 
           })}
         </tbody>
       </table>
+      <p className="foot-note">Each cell: moves used and gap to the shortest solution (solved), or the limit that ended the game, then the game time.</p>
       {puzzleRows.some((p) => !p.optimal_exact) && <p className="foot-note">* Extension puzzles use a best-known length, not a proven optimum.</p>}
     </div>
   );

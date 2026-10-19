@@ -3,7 +3,7 @@ import { api, type Mode } from "../api";
 import { fmtLatency, fmtLimit, fmtTime } from "../race";
 import type { Config, ModelSummary, Summary } from "../types";
 import { TradeoffPlot } from "./charts";
-import { KIND_SHORT, SET_DESC, SET_LABEL, engineColor, findingSentence, gapFmt, highlights, num, pct } from "./stats";
+import { KIND_SHORT, SET_DESC, SET_LABEL, engineColor, findingSentence, gapFmt, highlights, num, pct, raceOf } from "./stats";
 
 const SETS = ["primary", "warmup", "extension", "all"] as const;
 
@@ -19,7 +19,10 @@ export default function ResultsSlide({ mode, config }: { mode: Mode; config: Con
   const rows: ModelSummary[] = summary ? (set === "all" ? summary.overall : summary.by_set[set] ?? []) : [];
   const h = highlights(rows);
   const finding = findingSentence(rows);
-  const puzzles = new Set(summary?.per_puzzle.filter((p) => set === "all" || p.set === set).map((p) => `${p.puzzle_id}#${p.repeat}`)).size;
+  const setRows = summary?.per_puzzle.filter((p) => set === "all" || p.set === set) ?? [];
+  const puzzles = new Set(setRows.map((p) => p.puzzle_id)).size;
+  const races = new Set(setRows.map(raceOf)).size;
+  const colorOf = (key: string) => engineColor(key, config.models.findIndex((m) => m.key === key));
   const best = (r: ModelSummary, w?: ModelSummary) => (w && w.model_key === r.model_key ? "best" : "");
 
   return (
@@ -30,15 +33,19 @@ export default function ResultsSlide({ mode, config }: { mode: Mode; config: Con
             <button key={s} role="tab" className="tab" aria-selected={set === s} onClick={() => setSet(s)}>{SET_LABEL[s]}</button>
           ))}
         </div>
-        <span className="muted" style={{ fontSize: 12 }}>Use this view as the last scene of the recording.</span>
+        <span className="slide-hint">Use this view as the last scene of the recording.</span>
       </div>
 
       <article className="slide" aria-label="Benchmark results slide">
         <header className="slide-head">
           <div className="slide-title">
-            Rubik's Cube Race, AI Engineering assignment 2<br />
-            {SET_LABEL[set]} set: <span className="num">{puzzles}</span> puzzles, {SET_DESC[set]}
-            {mode === "mock" && <b style={{ color: "var(--warning)" }}> (mock data)</b>}
+            <div className="slide-kicker">
+              Rubik's Cube Race · AI Engineering, Assignment 02
+              {mode === "mock" && <span className="slide-mock">Mock data, not benchmark results</span>}
+            </div>
+            <div>
+              {SET_LABEL[set]} set: <span className="num">{races}</span> races{races !== puzzles ? <> on <span className="num">{puzzles}</span> puzzles</> : null}, {SET_DESC[set]}
+            </div>
           </div>
           <div className="slide-id">
             <div className="slide-id-name">{config.student_name}</div>
@@ -62,6 +69,7 @@ export default function ResultsSlide({ mode, config }: { mode: Mode; config: Con
 
             <div className="slide-table-wrap">
             <table className="slide-table">
+              <caption className="sr-only">Section 3 metrics per engine</caption>
               <thead>
                 <tr>
                   <th>Engine</th>
@@ -73,10 +81,10 @@ export default function ResultsSlide({ mode, config }: { mode: Mode; config: Con
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r, i) => (
+                {rows.map((r) => (
                   <tr key={r.model_key}>
                     <td>
-                      <span className="swatch" style={{ background: engineColor(r.model_key, i) }} aria-hidden="true" />
+                      <span className="swatch" style={{ background: colorOf(r.model_key) }} aria-hidden="true" />
                       {r.label}
                       <span className="slide-kind">{KIND_SHORT[r.kind]}</span>
                     </td>
@@ -103,8 +111,8 @@ export default function ResultsSlide({ mode, config }: { mode: Mode; config: Con
             </div>
 
             <footer className="slide-foot">
-              Best value in blue where lower or higher is clearly better (total time is not: failed games end early). Optimality gap = moves used − exact shortest moves (bidirectional BFS), averaged over solved games.
-              Unsolved = {config.rules.max_moves}-move or {fmtLimit(config.rules.time_limit_s)} limit reached. Same scrambles, rules and retry policy for every engine.
+              <span>Blue marks the best value where better is unambiguous (not total time: failed games end early).</span>
+              <span>Optimality gap = moves used − shortest moves ({set === "extension" ? "best-known reference" : set === "all" ? "exact by BFS; best-known reference for extension" : "exact, bidirectional BFS"}), averaged over solved games. Unsolved = {config.rules.max_moves}-move or {fmtLimit(config.rules.time_limit_s)} limit reached. Same scrambles, rules and retry policy for every engine.</span>
             </footer>
           </>
         )}

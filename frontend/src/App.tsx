@@ -120,7 +120,7 @@ export default function App() {
       </header>
       {config && mode === "mock" && (
         <p className="notice">
-          Mock mode: simulated engines for development. These runs are stored separately and never appear in the reported benchmark.
+          <b>Mock mode.</b> Simulated engines for development: these runs are stored separately and never appear in the reported benchmark.
         </p>
       )}
 

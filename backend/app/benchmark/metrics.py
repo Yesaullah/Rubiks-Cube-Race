@@ -69,7 +69,7 @@ def per_puzzle(trials: list[dict]) -> list[dict]:
     rows = []
     for t in trials:
         rows.append({k: t.get(k) for k in (
-            "puzzle_id", "set", "repeat", "optimal_length", "optimal_exact", "label", "status",
+            "race_id", "puzzle_id", "set", "repeat", "optimal_length", "optimal_exact", "label", "status",
             "moves", "gap", "total_time_s", "mean_latency_s", "invalid_outputs", "rank")})
     return rows
 
