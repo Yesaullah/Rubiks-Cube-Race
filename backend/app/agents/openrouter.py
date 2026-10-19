@@ -94,8 +94,8 @@ def parse_decision_response(data: dict) -> CallResult:
 
 
 SYSTEM_PROMPT = (
-    f"{INSTRUCTIONS}\n\n{FACELET_LEGEND}\n\nLegal moves (choose exactly one):\n"
-    + "\n".join(f"- {m}: {d}" for m, d in move_criteria().items())
+    f"{INSTRUCTIONS}\n\n{FACELET_LEGEND}\n\nLegal moves (choose exactly one): "
+    + ", ".join(move_criteria())
     + '\n\nReply with only a JSON object of the form {"move": "<move>"}.'
 )
 

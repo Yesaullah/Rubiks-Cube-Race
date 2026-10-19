@@ -85,8 +85,9 @@ The game is turned into a state/action space, as with the Snake example from cla
 }
 ```
 
-- **Decision models** (`POST https://openrouter.ai/api/alpha/decisions`) get this as `state`, plus one typed `choice` question `next_move`. Its 18 `criteria` describe the legal moves, for example `"U": "Turn the upper face clockwise by 90 degrees"`. The question wording is identical for all three models; only `model` changes. We record the returned `confidence` and `probabilities` for every move.
-- **Opus** (`POST https://openrouter.ai/api/v1/chat/completions`) gets the same instruction text and move definitions in its system prompt, and the same state JSON as the user message. It must reply with `{"move": "<one of 18>"}`, enforced by `response_format: json_schema`. Replies are validated strictly; code fences, extra keys or illegal moves count as malformed.
+- **Decision models** (`POST https://openrouter.ai/api/alpha/decisions`) get this as `state`, plus one typed `choice` question `next_move`. Its instructions read: *"This is a 3x3 twisty-puzzle game. Select which face turn to make next to bring the puzzle closer to its solved state, using as few total turns as possible."* The 18 `criteria` are the bare move names (`U`, `U'`, `U2`, …); move notation is explained in the state's `legend`. The question wording is identical for all three models; only `model` changes.
+  - *Wording note:* an earlier wording ("You are solving a 3x3 Rubik's Cube … choose the move most likely to …", with a sentence describing each move) made `openai/gpt-6-luna-decisions` refuse about 75% of requests (HTTP 502, "refused to answer"). Pre-run probes found the neutral wording above gets about 90% first-try answers. It was changed for **every** model before any benchmark run, so all engines saw the same text. We record the returned `confidence` and `probabilities` for every move.
+- **Opus** (`POST https://openrouter.ai/api/v1/chat/completions`) gets the same instruction text, legend and list of 18 legal moves in its system prompt, and the same state JSON as the user message. It must reply with `{"move": "<one of 18>"}`, enforced by `response_format: json_schema`. Replies are validated strictly; code fences, extra keys or illegal moves count as malformed.
 
 ---
 

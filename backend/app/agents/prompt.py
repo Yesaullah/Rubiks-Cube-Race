@@ -5,12 +5,15 @@ and the same 18 move definitions; only the transport differs.
 """
 from __future__ import annotations
 
-from ..cube.engine import MOVE_DESCRIPTIONS, MOVES, faces_grid
+from ..cube.engine import MOVES, faces_grid
 
+# Wording note: gpt-6-luna-decisions refused ~75% of requests (HTTP 502 "refused to answer") when
+# asked "You are solving a Rubik's Cube ... choose the move most likely to ..." with long per-move
+# descriptions. This neutral game wording with bare move names gets ~90% first-try answers.
+# Every model receives exactly this text; move notation is explained in FACELET_LEGEND.
 INSTRUCTIONS = (
-    "You are solving a 3x3 Rubik's Cube one move at a time. "
-    "Choose the single next move most likely to progress toward the solved cube "
-    "(every face a single colour) in as few total moves as possible."
+    "This is a 3x3 twisty-puzzle game. Select which face turn to make next to bring the puzzle "
+    "closer to its solved state, using as few total turns as possible."
 )
 
 FACELET_LEGEND = (
@@ -35,4 +38,5 @@ def build_state(facelets: str, history: list[str], max_moves: int, window: int) 
 
 
 def move_criteria() -> dict[str, str]:
-    return {m: MOVE_DESCRIPTIONS[m] for m in MOVES}
+    """The 18 options, as bare move names (descriptions raised the Luna refusal rate)."""
+    return {m: m for m in MOVES}
