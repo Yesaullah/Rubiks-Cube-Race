@@ -11,7 +11,8 @@ from .config import REPO_ROOT, RESULTS_DIR
 CHART_DIR = REPO_ROOT / "docs" / "charts"
 README = REPO_ROOT / "README.md"
 START, END = "<!-- RESULTS:START -->", "<!-- RESULTS:END -->"
-COLORS = {"opus": "#7c3aed", "jev": "#db2777", "luna": "#0ea5e9", "clef": "#f59e0b"}
+# same engine colours as the web app (frontend/src/styles.css --engine-*)
+COLORS = {"opus": "#0f766e", "jev": "#a3550b", "luna": "#a01a52", "clef": "#4d7c0f"}
 SET_TITLES = {"primary": "Primary benchmark (4–5 turn scrambles, exact BFS optimum)",
               "warmup": "Warm-up (3–4 turn scrambles)",
               "extension": "Extension (15–20 turn scrambles, best-known reference)"}
@@ -126,6 +127,12 @@ def charts(rows: list[dict], tag: str) -> list[str]:
     ax.bar([i - 0.2 for i in x], [r["mean_moves_solved"] or 0 for r in rows], 0.4, label="model moves (solved)", color=colors)
     ax.bar([i + 0.2 for i in x], [r["mean_optimal_solved"] or 0 for r in rows], 0.4, label="shortest", color="#cbd5e1")
     ax.set_xticks(list(x), labels)
+    for i, r in enumerate(rows):
+        if r["mean_moves_solved"] is None:
+            ax.text(i, 0.3, "no solves", ha="center", va="bottom", fontsize=8, color="#5a6270")
+        else:
+            ax.text(i - 0.2, r["mean_moves_solved"], f"{r['mean_moves_solved']:.1f}", ha="center", va="bottom", fontsize=8)
+            ax.text(i + 0.2, r["mean_optimal_solved"], f"{r['mean_optimal_solved']:.1f}", ha="center", va="bottom", fontsize=8)
     ax.set_title("Moves used vs shortest solution (solved games)")
     ax.legend(fontsize=8)
     save(fig, "moves")

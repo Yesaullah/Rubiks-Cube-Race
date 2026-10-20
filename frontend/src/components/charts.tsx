@@ -147,15 +147,20 @@ export function TradeoffPlot({ rows, height = 260 }: { rows: ModelSummary[]; hei
   const span = Math.log10(decades[decades.length - 1]) - lo10 || 1;
   const near = (a: { x: number; y: number }, b: { x: number; y: number }) =>
     a.y === b.y && Math.abs(Math.log10(a.x) - Math.log10(b.x)) < 0.15;
+  // chain neighbours into clusters (A near B near C is one cluster even if A and C are apart)
+  const sorted = [...data].sort((a, b) => a.y - b.y || a.x - b.x);
+  const groups: (typeof data)[] = [];
+  for (const d of sorted) {
+    const g = groups[groups.length - 1];
+    if (g && near(g[g.length - 1], d)) g.push(d);
+    else groups.push([d]);
+  }
+  // A lone point labels itself (to the left near the right edge). In a cluster, the leftmost point
+  // prints every member's name as a stack to its left, each in that engine's colour; the others print none.
   const placed = data.map((d) => {
-    const frac = (Math.log10(d.x) - lo10) / span;
-    const cluster = data.filter((o) => near(o, d)).sort((a, b) => a.x - b.x);
-    const k = cluster.indexOf(d);
-    if (cluster.length > 1) {
-      // leftmost of a cluster labels to its left; the rest label to the right, stacked upward
-      return { ...d, left: k === 0, dy: k === 0 ? 0 : (k - 1) * -15 };
-    }
-    return { ...d, left: frac > 0.72, dy: 0 };
+    const g = groups.find((x) => x.includes(d))!;
+    if (g.length === 1) return { ...d, left: (Math.log10(d.x) - lo10) / span > 0.72, stack: [d] };
+    return { ...d, left: true, stack: g.indexOf(d) === 0 ? g : [] };
   });
   return (
     <ResponsiveContainer width="100%" height={height}>
@@ -178,10 +183,13 @@ export function TradeoffPlot({ rows, height = 260 }: { rows: ModelSummary[]; hei
           shape={(p: any) => (
             <g>
               <circle cx={p.cx} cy={p.cy} r={7} fill={engineColor(p.payload.key, p.payload.i)} stroke="#fff" strokeWidth={2} />
-              <text x={p.payload.left ? p.cx - 11 : p.cx + 11} y={p.cy + 4.5 + p.payload.dy}
-                textAnchor={p.payload.left ? "end" : "start"} className="chart-point">
-                {p.payload.name}
-              </text>
+              {p.payload.stack.map((m: any, k: number) => (
+                <text key={m.key} x={p.payload.left ? p.cx - 11 : p.cx + 11} y={p.cy + 4.5 - 16 * k}
+                  textAnchor={p.payload.left ? "end" : "start"} className="chart-point"
+                  style={p.payload.stack.length > 1 ? { fill: engineColor(m.key, m.i) } : undefined}>
+                  {m.name}
+                </text>
+              ))}
             </g>
           )} />
       </ScatterChart>
