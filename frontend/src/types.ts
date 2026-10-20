@@ -54,6 +54,8 @@ export interface MoveRecord {
   latency: number;
   confidence: number | null;
   t: number;
+  /** why a turn produced no move: refused / malformed / timeout / api_error */
+  reason?: string;
 }
 
 export interface GameView {

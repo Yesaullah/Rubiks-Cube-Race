@@ -8,6 +8,8 @@ import { KIND_LABEL, engineColor } from "./stats";
 const MemoCube = memo(Cube3D);
 const ORDINAL = ["", "1st", "2nd", "3rd", "4th", "5th", "6th"];
 const TAPE_SLOTS = 30;
+/** Short label for a forfeited turn, by reason (from the backend runner). */
+const NO_MOVE: Record<string, string> = { refused: "refused", malformed: "malformed", timeout: "timed out", api_error: "API error" };
 
 function stateLine(g: GameView, clock: number, optimal: number) {
   switch (g.status) {
@@ -78,7 +80,7 @@ export default function EngineLane({ g, index, clock, maxMoves, optimal, showNet
           </div>
           <div>
             <dt className="readout-label" title="Latency of the decision, and the model's confidence when it reports one">Last move</dt>
-            <dd className="readout-value small" style={{ margin: 0 }}>{last ? last.move ?? "invalid" : "–"}</dd>
+            <dd className="readout-value small" style={{ margin: 0 }}>{last ? last.move ?? NO_MOVE[last.reason ?? ""] ?? "no move" : "–"}</dd>
             <dd className="readout-sub" style={{ margin: 0 }}>
               {last ? fmtLatency(last.latency) : ""}
               {last?.confidence != null && <span className="readout-conf">{Math.round(last.confidence * 100)}% confidence</span>}
@@ -104,7 +106,7 @@ export default function EngineLane({ g, index, clock, maxMoves, optimal, showNet
           const cls = ["slot", i < optimal ? "slot-par" : "", h ? (h.move ? "slot-played" : "slot-forfeit") : "",
             h && i === g.history.length - 1 ? "slot-new" : ""].join(" ");
           return (
-            <li key={i} className={cls} title={h ? `Move ${i + 1}: ${h.move ?? "invalid output"}, ${fmtLatency(h.latency)}` : undefined}>
+            <li key={i} className={cls} title={h ? `Move ${i + 1}: ${h.move ?? `no move (${NO_MOVE[h.reason ?? ""] ?? "invalid"})`}, ${fmtLatency(h.latency)}` : undefined}>
               {h ? h.move ?? "×" : ""}
             </li>
           );

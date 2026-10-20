@@ -76,7 +76,7 @@ export function applyEvent(s: RaceState, ev: RaceEvent): RaceState {
       if (!g) return s;
       const ng: GameView = {
         ...g,
-        history: [...g.history, { move: ev.move, latency: ev.latency_s, confidence: ev.confidence, t: ev.t }],
+        history: [...g.history, { move: ev.move, latency: ev.latency_s, confidence: ev.confidence, t: ev.t, reason: ev.forfeit_reason }],
         invalid: g.invalid + (ev.invalid_outputs ?? 0),
         moves: ev.moves,
         forfeits: ev.forfeits,
